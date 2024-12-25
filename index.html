@@ -1,0 +1,404 @@
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <h1>PnP Layout Creator</h1>
+    <p>Drag and drop images or upload them to generate a PDF with them tiled on paper.</p>
+    <div id="dropZone1" class="drop-zone">Drag and drop your images here (Front)</div>
+    <div id="dropZone1Count" class="drop-zone-count"></div>
+    <div id="dropZone2" class="drop-zone">Drag and drop your images here (Back)</div>
+    <div id="dropZone2Count" class="drop-zone-count"></div>
+    <input type="file" id="imageUpload1" multiple accept="image/*" style="display: none;">
+    <input type="file" id="imageUpload2" multiple accept="image/*" style="display: none;">
+    <div>
+        <label for="dpiInput">Enter DPI for Input Images: </label>
+        <input type="number" id="dpiInput" value="300">
+    </div>
+    <div id="crosshairInputs">
+        Crosshair options:
+        <label for="crosshairFront">Front: </label>
+        <input type="checkbox" id="crosshairFront" checked>
+        <label for="crosshairBack">Back: </label>
+        <input type="checkbox" id="crosshairBack">
+        <label for="crosshairLineWidth">Line width: </label>
+        <input type="number" id="crosshairLineWidth" value="1">
+        <label for="crosshairSize">Size: </label>
+        <input type="number" id="crosshairSize" value="20">
+        <label for="crosshairColor">Color: </label>
+        <input type="color" id="crosshairColor" value="#c4c4c4">
+    </div>
+    <div id="borderInputs">
+        Border options:
+        <label for="borderEnabled">Border: </label>
+        <input type="checkbox" id="borderEnabled">
+        <label for="borderWidth">Border width (in points): </label>
+        <input type="number" id="borderWidth" value="20">
+        <label for="borderColor">Border color: </label>
+        <input type="color" id="borderColor" value="#000000">
+    </div>
+    <div id="marginInputs">
+        <label>Set margins (in points): </label>
+        <input type="number" id="marginTop" class="margin-input" placeholder="Top" value="20">
+        <input type="number" id="marginBottom" class="margin-input" placeholder="Bottom" value="20">
+        <input type="number" id="marginLeft" class="margin-input" placeholder="Left" value="20">
+        <input type="number" id="marginRight" class="margin-input" placeholder="Right" value="20">
+    </div>
+    <div id="marginBetweenImages">
+        <label for="marginBetweenImagesInput">Set margin between images (in points): </label>
+        <input type="number" id="marginBetweenImagesInput" value="20">
+    </div>
+    <div id="paperSizeInputs">
+        <label for="paperSize">Select Paper Size: </label>
+        <select id="paperSize">
+            <option value="A4">A4</option>
+            <option value="LETTER">Letter</option>
+        </select>
+    </div>
+    <button id="generatePdf">Generate PDF</button>
+    <a id="downloadLink" style="display: none;">Download PDF</a>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #dropZone1, #dropZone2 {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            color: #888;
+        }
+        #dropZone1.dragging, #dropZone2.dragging {
+            border-color: #00f;
+            color: #00f;
+        }
+        #dpiInput, #marginInputs {
+            margin: 10px 0;
+        }
+        .margin-input {
+            margin-right: 10px;
+        }
+        .drop-zone-count {
+            text-align: center;
+            margin-top: -15px;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        #generatePdf {
+            padding: 10px 20px;
+            background-color: #00f;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #generatePdf:hover {
+            background-color: #00a;
+        }
+        #downloadLink {
+            padding: 10px 20px;
+            background-color: #00f;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #downloadLink:hover {
+            background-color: #00a;
+        }
+        #paperSizeInputs {
+            margin: 10px 0;
+        }
+    </style>
+    <script>
+        const A4_WIDTH = 595.28;
+        const A4_HEIGHT = 841.89;
+        const LETTER_WIDTH = 612;
+        const LETTER_HEIGHT = 792;
+        const images1 = [];
+        const images2 = [];
+
+        function setupDropZone(dropZone, imageUpload, targetArray, flip = false) {
+            dropZone.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                dropZone.classList.add('dragging');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragging');
+            });
+
+            dropZone.addEventListener('drop', (event) => {
+                event.preventDefault();
+                dropZone.classList.remove('dragging');
+                handleFiles(event.dataTransfer.files, targetArray, flip);
+            });
+
+            dropZone.addEventListener('click', () => {
+                imageUpload.click();
+            });
+
+            imageUpload.addEventListener('change', (event) => {
+                handleFiles(event.target.files, targetArray, flip);
+            });
+        }
+
+        function updateDropZoneCount(dropZoneCountId, count) {
+            console.log(`Updating drop zone count for ${dropZoneCountId} to ${count}`);
+            const dropZoneCount = document.getElementById(dropZoneCountId);
+            dropZoneCount.textContent = `${count} file(s) selected`;
+        }
+
+        function handleFiles(files, targetArray, flip = false) {
+            console.log(`Handling files for ${targetArray === images1 ? 'Front' : 'Back'} drop zone. Flip: ${flip}`);
+            targetArray.length = 0;
+            updateDropZoneCount(targetArray === images1 ? 'dropZone1Count' : 'dropZone2Count', files.length);
+
+            Array.from(files).forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (flip) {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.scale(-1, 1);
+                            ctx.drawImage(img, -img.width, 0);
+                            const flippedSrc = canvas.toDataURL();
+                            targetArray.push({ src: flippedSrc, type: file.type, name: file.name });
+                        } else {
+                            targetArray.push({ src: img.src, type: file.type, name: file.name });
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        setupDropZone(
+            document.getElementById('dropZone1'),
+            document.getElementById('imageUpload1'),
+            images1
+        );
+        setupDropZone(
+            document.getElementById('dropZone2'),
+            document.getElementById('imageUpload2'),
+            images2,
+            true
+        );
+
+        document.getElementById('generatePdf').addEventListener('click', async () => {
+            console.log('Generate PDF button clicked');
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.style.display = 'none';
+
+            const pdfDoc = await PDFLib.PDFDocument.create();
+            const dpi = parseInt(document.getElementById('dpiInput').value) || 72;
+            const marginTop = parseFloat(document.getElementById('marginTop').value) || 0;
+            const marginBottom = parseFloat(document.getElementById('marginBottom').value) || 0;
+            const marginLeft = parseFloat(document.getElementById('marginLeft').value) || 0;
+            const marginRight = parseFloat(document.getElementById('marginRight').value) || 0;
+
+            const PAGE_WIDTH = document.getElementById('paperSize').value === 'A4' ? A4_WIDTH : LETTER_WIDTH;
+            const PAGE_HEIGHT = document.getElementById('paperSize').value === 'A4' ? A4_HEIGHT : LETTER_HEIGHT;
+            const usableWidth = PAGE_WIDTH - marginLeft - marginRight;
+            const usableHeight = PAGE_HEIGHT - marginTop - marginBottom;
+
+            const crosshairFront = document.getElementById('crosshairFront').checked;
+            const crosshairBack = document.getElementById('crosshairBack').checked;
+
+            const border = document.getElementById('borderEnabled').checked;
+
+            let oddImages = images1.sort((a, b) => a.name.localeCompare(b.name));
+            let evenImages = images2.sort((a, b) => a.name.localeCompare(b.name));
+
+            let pageIndex = 0;
+
+            while (oddImages.length > 0 || evenImages.length > 0) {
+                // Add odd page
+                if (oddImages.length > 0) {
+                    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    await drawImagesOnPage(pdfDoc, page, oddImages, dpi, marginTop, marginBottom, marginLeft, marginRight, crosshairFront, border);
+                    pageIndex++;
+                }
+
+                // Add even page
+                if (evenImages.length > 0) {
+                    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    await drawImagesOnPage(pdfDoc, page, evenImages, dpi, marginTop, marginBottom, marginLeft, marginRight, crosshairBack, border);
+                    await flipPageHorizontally(pdfDoc, pageIndex);
+                    pageIndex++;
+                }
+            }
+
+            const pdfBytes = await pdfDoc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+
+            downloadLink.href = url;
+            downloadLink.download = 'images.pdf';
+            downloadLink.style.display = 'inline';
+            downloadLink.textContent = 'Download PDF';
+            console.log('PDF generation completed');
+        });
+
+        async function drawImagesOnPage(pdfDoc, page, imageArray, dpi, marginTop, marginBottom, marginLeft, marginRight, crosshair, border) {
+            console.log('Drawing images on page');
+            const PAGE_WIDTH = document.getElementById('paperSize').value === 'A4' ? A4_WIDTH : LETTER_WIDTH;
+            const PAGE_HEIGHT = document.getElementById('paperSize').value === 'A4' ? A4_HEIGHT : LETTER_HEIGHT;
+            const usableWidth = PAGE_WIDTH - marginLeft - marginRight;
+            const usableHeight = PAGE_HEIGHT - marginTop - marginBottom;
+
+            const imgMargin = parseFloat(document.getElementById('marginBetweenImagesInput').value);
+            const crosshairLineWidth = parseFloat(document.getElementById('crosshairLineWidth').value);
+            const crosshairSize = parseFloat(document.getElementById('crosshairSize').value);
+            const crosshairColor = document.getElementById('crosshairColor').value;
+            const borderWidth = parseFloat(document.getElementById('borderWidth').value);
+            const borderColor = document.getElementById('borderColor').value;
+
+            let imgIndex = 0
+            for (let pass = 0; pass < 3; pass++) {
+                console.log(`Drawing images on page, pass ${pass}`);
+                let x = marginLeft, y = PAGE_HEIGHT - marginTop;
+                let rowHeight = 0;
+                for (imgIndex = 0; imgIndex < imageArray.length; imgIndex++) {
+                    console.log(`Drawing image at index ${imgIndex}`);
+
+                    let imgFile = new Image();
+                    imgFile.src = imageArray[imgIndex].src;
+                    await imgFile.decode();
+                    const imgWidth = (imgFile.width / dpi) * 72 + imgMargin;
+                    const imgHeight = (imgFile.height / dpi) * 72 + imgMargin;
+
+                    if (x + imgWidth > usableWidth + marginLeft) {
+                        x = marginLeft;
+                        y -= rowHeight;
+                        rowHeight = 0;
+
+                        if (y - imgHeight < marginBottom) {
+                            break; // Stop adding images to this page
+                        }
+                    }
+
+                    if (pass == 0){
+                        if (border) {
+                            page.drawRectangle({
+                                x: x - borderWidth,
+                                y: y - imgHeight - borderWidth,
+                                width: imgWidth + 2 * borderWidth,
+                                height: imgHeight + 2 * borderWidth,
+                                color: PDFLib.rgb(...Object.values(hexToRgb(borderColor))),
+                            });
+                        }
+                    }
+                    else if (pass == 1){
+                        if (crosshair) {
+                            drawCrosshair(page, x, y, imgWidth, imgHeight, crosshairLineWidth, crosshairSize, crosshairColor);
+                        }
+                    }
+                    else if (pass == 2){
+                        const img = imageArray[imgIndex];
+                        const imgData = await fetch(img.src).then((res) => res.arrayBuffer());
+                        const pdfImage =
+                            img.type === 'image/png'
+                                ? await pdfDoc.embedPng(imgData)
+                                : await pdfDoc.embedJpg(imgData);
+                        page.drawImage(pdfImage, {
+                            x: x,
+                            y: y - imgHeight,
+                            width: imgWidth,
+                            height: imgHeight,
+                        });
+                    }
+
+                    x += imgWidth + imgMargin;
+                    rowHeight = Math.max(rowHeight, imgHeight + imgMargin);
+                }
+            }
+            for (let i = 0; i < imgIndex; i++) {
+                imageArray.shift();
+            }
+            console.log('Finished drawing images on page');
+        }
+
+        async function flipPageHorizontally(pdfDoc, pageIndex) {
+            console.log(`Flipping page horizontally at index ${pageIndex}`);
+            const pages = pdfDoc.getPages();
+            const page = pages[pageIndex].scale(-1, 1);
+        }
+
+        function hexToRgb(hex) {
+            console.log(`Converting hex color ${hex} to RGB`);
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 256,
+                g: parseInt(result[2], 16) / 256,
+                b: parseInt(result[3], 16) / 256
+            } : null;
+        }
+
+        function drawCrosshair(page, x, y, imgWidth, imgHeight, crosshairLineWidth, crosshairSize, crosshairColor) {
+            console.log('Drawing crosshair');
+            page.drawLine({
+                start: { x: x - crosshairSize, y: y},
+                end: { x: x + crosshairSize, y: y},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x, y: y - crosshairSize},
+                end: { x: x, y: y + crosshairSize},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x + imgWidth - crosshairSize, y: y},
+                end: { x: x + imgWidth + crosshairSize, y: y},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x + imgWidth, y: y - crosshairSize},
+                end: { x: x + imgWidth, y: y + crosshairSize},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x - crosshairSize, y: y - imgHeight},
+                end: { x: x + crosshairSize, y: y - imgHeight},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x, y: y - imgHeight - crosshairSize},
+                end: { x: x, y: y - imgHeight + crosshairSize},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x + imgWidth - crosshairSize, y: y - imgHeight},
+                end: { x: x + imgWidth + crosshairSize, y: y - imgHeight},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+
+            page.drawLine({
+                start: { x: x + imgWidth, y: y - imgHeight - crosshairSize},
+                end: { x: x + imgWidth, y: y - imgHeight + crosshairSize},
+                thickness: crosshairLineWidth,
+                color: PDFLib.rgb(...Object.values(hexToRgb(crosshairColor))),
+            });
+        }
+    </script>
+</body>
