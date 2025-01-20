@@ -198,11 +198,11 @@
             downloadLink.style.display = 'none';
 
             const pdfDoc = await PDFLib.PDFDocument.create();
-            const dpi = parseInt(document.getElementById('dpiInput').value) || 72;
-            const marginTop = parseFloat(document.getElementById('marginTop').value) || 0;
-            const marginBottom = parseFloat(document.getElementById('marginBottom').value) || 0;
-            const marginLeft = parseFloat(document.getElementById('marginLeft').value) || 0;
-            const marginRight = parseFloat(document.getElementById('marginRight').value) || 0;
+            const dpi = parseInt(document.getElementById('dpiInput').value);
+            const marginTop = parseFloat(document.getElementById('marginTop').value);
+            const marginBottom = parseFloat(document.getElementById('marginBottom').value);
+            const marginLeft = parseFloat(document.getElementById('marginLeft').value);
+            const marginRight = parseFloat(document.getElementById('marginRight').value);
 
             const PAGE_WIDTH = document.getElementById('paperSize').value === 'A4' ? A4_WIDTH : LETTER_WIDTH;
             const PAGE_HEIGHT = document.getElementById('paperSize').value === 'A4' ? A4_HEIGHT : LETTER_HEIGHT;
@@ -272,15 +272,17 @@
                     let imgFile = new Image();
                     imgFile.src = imageArray[imgIndex].src;
                     await imgFile.decode();
-                    const imgWidth = (imgFile.width / dpi) * 72 + imgMargin;
-                    const imgHeight = (imgFile.height / dpi) * 72 + imgMargin;
+                    const imgWidth = (imgFile.width / dpi) * 72;
+                    const imgHeight = (imgFile.height / dpi) * 72;
+                    const imgWidthWithMargin = imgWidth + imgMargin;
+                    const imgHeightWithMargin = imgHeight + imgMargin;
 
-                    if (x + imgWidth > usableWidth + marginLeft) {
+                    if (x + imgWidthWithMargin > usableWidth + marginLeft) {
                         x = marginLeft;
                         y -= rowHeight;
                         rowHeight = 0;
 
-                        if (y - imgHeight < marginBottom) {
+                        if (y - imgHeightWithMargin < marginBottom) {
                             break; // Stop adding images to this page
                         }
                     }
