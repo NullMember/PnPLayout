@@ -8,41 +8,9 @@ const OUTLINE_MAX_DIM = 1200; // outlines are traced on a copy no larger than th
 
 // ---- DPI metadata -------------------------------------------------------------
 
-// Read the DPI stored in a PNG (pHYs chunk) or JPEG (JFIF header); null if absent.
-async function readImageDpi(file) {
-    const bytes = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
-    const view = new DataView(bytes.buffer);
-    if (bytes[0] === 0x89 && bytes[1] === 0x50) {
-        let p = 8;
-        while (p + 12 <= bytes.length) {
-            const len = view.getUint32(p);
-            const type = String.fromCharCode(...bytes.subarray(p + 4, p + 8));
-            if (type === 'pHYs' && p + 17 <= bytes.length) {
-                const ppu = view.getUint32(p + 8);
-                return bytes[p + 16] === 1 && ppu > 0 ? ppu * 0.0254 : null;
-            }
-            if (type === 'IDAT' || type === 'IEND') return null;
-            p += 12 + len;
-        }
-        return null;
-    }
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-        let p = 2;
-        while (p + 4 < bytes.length && bytes[p] === 0xff) {
-            const marker = bytes[p + 1];
-            const len = view.getUint16(p + 2);
-            if (marker === 0xe0 && String.fromCharCode(...bytes.subarray(p + 4, p + 9)) === 'JFIF\0') {
-                const units = bytes[p + 11];
-                const density = view.getUint16(p + 12);
-                if (!density) return null;
-                if (units === 1) return density;
-                if (units === 2) return density * 2.54;
-                return null;
-            }
-            p += 2 + len;
-        }
-    }
-    return null;
+// DPI stored in the image file (shared/pnp-shared.js); null if absent.
+function readImageDpi(file) {
+    return PnP.readImageDpi(file);
 }
 
 // ---- Loading ---------------------------------------------------------------------
@@ -194,13 +162,12 @@ function traceOutline(face) {
         x += DX[dir];
         y += DY[dir];
         if (x === sx && y === sy) break;
-        const last = pts[pts.length - 1];
-        const prev = pts[pts.length - 2];
-        if (prev && (prev[0] === last[0] && last[0] === x || prev[1] === last[1] && last[1] === y)) last[0] = x, last[1] = y;
-        else pts.push([x, y]);
+        pts.push([x, y]);
     }
 
     // Pixel staircases -> smooth polygon, then back to full-resolution pixels.
+    // Smoothing works on every unit step: averaging after merging straight
+    // runs used to cut whole corners off shapes with long straight edges.
     const simplified = simplifyPolygon(smoothPolygon(pts), 0.6);
     return simplified.map(([px, py]) => [px / s, py / s]);
 
