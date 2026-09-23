@@ -1,0 +1,187 @@
+/* PnPLayout-only styles. The shared base lives in style.css (synced from the hub). */
+
+/* ---- PnPLayout: piece list --------------------------------------------- */
+
+.piece-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.piece-toolbar {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.piece {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.piece-faces {
+    display: flex;
+    gap: 8px;
+}
+
+.piece-face {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: repeating-conic-gradient(var(--checker) 0% 25%, var(--surface2) 0% 50%) 50% / 12px 12px;
+    border: 1px solid var(--border);
+}
+
+.piece-face img {
+    max-width: 56px;
+    max-height: 56px;
+}
+
+.piece-face.back {
+    cursor: pointer;
+}
+
+.piece-face.back:hover {
+    border-color: var(--accent);
+}
+
+.piece-face.empty {
+    background: none;
+    border-style: dashed;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+}
+
+.piece-face-clear {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0.6rem;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+}
+
+.piece-face-clear:hover {
+    color: var(--danger);
+}
+
+.piece-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.piece-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.piece-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.piece-fields .control-group {
+    width: 120px;
+    margin: 0;
+}
+
+.piece-rotate {
+    padding-bottom: 10px;
+}
+
+.piece-remove {
+    align-self: start;
+    padding: 4px 8px;
+    background: none;
+    color: var(--text-dim);
+}
+
+.piece-remove:hover {
+    color: var(--danger);
+}
+
+/* ---- PnPLayout: sheet previews ------------------------------------------- */
+
+.sheet-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.segmented {
+    display: inline-flex;
+}
+
+.segmented button {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 0;
+}
+
+.segmented button:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.segmented button:last-child {
+    border-radius: 0 6px 6px 0;
+    border-left: none;
+}
+
+.segmented button[aria-pressed="true"],
+.segmented button[aria-pressed="true"]:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.segmented[hidden] {
+    display: none;
+}
+
+.sheet-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.sheet {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sheet canvas {
+    border-radius: 4px;
+    box-shadow: 0 4px 24px var(--shadow);
+}
+
+.sheet figcaption {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}

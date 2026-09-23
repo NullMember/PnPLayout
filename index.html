@@ -3,152 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PnP Layout Creator</title>
+    <title>PnP Layout</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/tool.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="shared/icon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#1a1d27">
+    <script src="shared/pnp-theme.js"></script>
+    <link rel="stylesheet" href="shared/pnp-shared.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>PnP Layout Creator</h1>
-            <p class="subtitle">Drag and drop front/back images to tile them onto printable pages, complete with crosshairs and borders for cutting.</p>
+            <h1>PnP Layout</h1>
+            <p class="subtitle">Pack mixed-shape components — coins, tokens, hex tiles, boards — tightly onto as few sheets as possible, using each image's transparent outline.</p>
         </header>
 
         <div class="content">
             <!-- Sidebar -->
             <div class="sidebar">
                 <div class="panel">
-                    <div class="panel-title">Images</div>
-
-                    <div class="control-group">
-                        <label>Front Images</label>
-                        <div class="dropzone" id="dropZone1">
-                            <div class="dz-title">Drag &amp; drop front images here</div>
-                            <div>or click to browse</div>
-                            <input type="file" id="imageUpload1" multiple accept="image/*">
-                        </div>
-                        <div class="dropzone-count" id="dropZone1Count"></div>
+                    <div class="panel-title">Pieces <span class="help" tabindex="0" data-tip="One image per piece. Transparent areas around the shape are ignored, so round and hexagonal pieces nest together. Set each piece's size and quantity in the list.">?</span></div>
+                    <div class="dropzone" id="dropZone">
+                        <div class="dz-title">Drag &amp; drop piece images here</div>
+                        <div>PNG with transparency works best</div>
+                        <input type="file" id="imageInput" multiple accept="image/png,image/jpeg,image/webp" hidden>
                     </div>
-
-                    <div class="control-group">
-                        <label>Back Images</label>
-                        <div class="dropzone" id="dropZone2">
-                            <div class="dz-title">Drag &amp; drop back images here</div>
-                            <div>or click to browse</div>
-                            <input type="file" id="imageUpload2" multiple accept="image/*">
-                        </div>
-                        <div class="dropzone-count" id="dropZone2Count"></div>
-                        <div class="input-hint">Back images are automatically flipped horizontally.</div>
-                    </div>
+                    <div id="importSlot"></div>
                 </div>
 
                 <div class="panel">
-                    <div class="panel-title">DPI</div>
+                    <div class="panel-title">Paper</div>
                     <div class="control-group">
-                        <label for="dpiInput">Input Image DPI</label>
-                        <input type="number" id="dpiInput" value="300">
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-title">Crosshair Options <span class="help" tabindex="0" data-tip="Draws small cutting-guide marks at each card's corners, useful for lining up scissors or a craft knife.">?</span></div>
-                    <div class="checkbox-group">
-                        <label class="inline"><input type="checkbox" id="crosshairFront" checked> Front</label>
-                        <label class="inline"><input type="checkbox" id="crosshairBack"> Back</label>
+                        <label for="paperSize">Preset</label>
+                        <select id="paperSize"></select>
                     </div>
                     <div class="row">
                         <div class="control-group">
-                            <label for="crosshairLineWidth">Line Width</label>
-                            <input type="number" id="crosshairLineWidth" value="1">
+                            <label for="paperW">Width (mm)</label>
+                            <input type="number" id="paperW" value="210" min="50" step="0.1" data-unit="mm">
                         </div>
                         <div class="control-group">
-                            <label for="crosshairSize">Size</label>
-                            <input type="number" id="crosshairSize" value="20">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="crosshairColor">Color</label>
-                        <input type="color" id="crosshairColor" value="#c4c4c4">
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-title">Border Options</div>
-                    <div class="control-group">
-                        <label class="inline"><input type="checkbox" id="borderEnabled"> Enable border</label>
-                    </div>
-                    <div class="control-group">
-                        <label for="borderWidth">Border Width (pt)</label>
-                        <input type="number" id="borderWidth" value="20">
-                    </div>
-                    <div class="control-group">
-                        <label for="borderColor">Border Color</label>
-                        <input type="color" id="borderColor" value="#000000">
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-title">Margins</div>
-                    <div class="row">
-                        <div class="control-group">
-                            <label for="marginTop">Top (pt)</label>
-                            <input type="number" id="marginTop" value="20">
-                        </div>
-                        <div class="control-group">
-                            <label for="marginBottom">Bottom (pt)</label>
-                            <input type="number" id="marginBottom" value="20">
+                            <label for="paperH">Height (mm)</label>
+                            <input type="number" id="paperH" value="297" min="50" step="0.1" data-unit="mm">
                         </div>
                     </div>
                     <div class="row">
                         <div class="control-group">
-                            <label for="marginLeft">Left (pt)</label>
-                            <input type="number" id="marginLeft" value="20">
+                            <label for="marginTop">Top margin (mm)</label>
+                            <input type="number" id="marginTop" value="7" min="0" step="0.5" data-unit="mm">
                         </div>
                         <div class="control-group">
-                            <label for="marginRight">Right (pt)</label>
-                            <input type="number" id="marginRight" value="20">
+                            <label for="marginBottom">Bottom margin (mm)</label>
+                            <input type="number" id="marginBottom" value="7" min="0" step="0.5" data-unit="mm">
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label for="marginBetweenImagesInput">Between Images (pt)</label>
-                        <input type="number" id="marginBetweenImagesInput" value="20">
+                    <div class="row">
+                        <div class="control-group">
+                            <label for="marginLeft">Left margin (mm)</label>
+                            <input type="number" id="marginLeft" value="7" min="0" step="0.5" data-unit="mm">
+                        </div>
+                        <div class="control-group">
+                            <label for="marginRight">Right margin (mm)</label>
+                            <input type="number" id="marginRight" value="7" min="0" step="0.5" data-unit="mm">
+                        </div>
                     </div>
                 </div>
 
                 <div class="panel">
-                    <div class="panel-title">Paper Size</div>
+                    <div class="panel-title">Packing <span class="help" tabindex="0" data-tip="Gap is the minimum distance between the cut outlines of two pieces (it is never smaller than the outline bleed). Precision is the packing grid: finer packs tighter but takes longer.">?</span></div>
+                    <div class="row">
+                        <div class="control-group">
+                            <label for="spacing">Gap between pieces (mm)</label>
+                            <input type="number" id="spacing" value="2" min="0" step="0.5" data-unit="mm">
+                        </div>
+                        <div class="control-group">
+                            <label for="precision">Precision</label>
+                            <select id="precision">
+                                <option value="0.25">Fine (0.25 mm)</option>
+                                <option value="0.5" selected>Normal (0.5 mm)</option>
+                                <option value="1">Fast (1 mm)</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="control-group">
-                        <label for="paperSize">Paper Size</label>
-                        <select id="paperSize">
-                            <option value="A4">A4</option>
-                            <option value="LETTER">Letter</option>
+                        <label for="defaultDpi">DPI for images without DPI info</label>
+                        <input type="number" id="defaultDpi" value="300" min="30" max="2400" step="1">
+                        <div class="input-hint">Only sets the starting size of newly added pieces.</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-title">Cutting</div>
+                    <div class="control-group">
+                        <label for="bleed">Outline bleed (mm)</label>
+                        <input type="number" id="bleed" value="1" min="0" max="5" step="0.25" data-unit="mm">
+                        <div class="input-hint">Extends each piece's edge colours past its outline.</div>
+                    </div>
+                    <div class="control-group">
+                        <label class="inline"><input type="checkbox" id="cutOutline" checked> Print cut outline</label>
+                    </div>
+                    <div class="row">
+                        <div class="control-group">
+                            <label for="cutWidth">Line width (pt)</label>
+                            <input type="number" id="cutWidth" value="0.5" min="0.1" max="5" step="0.1">
+                        </div>
+                        <div class="control-group">
+                            <label for="cutColor">Line colour</label>
+                            <input type="color" id="cutColor" value="#9a9a9a">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-title">Back Sides <span class="help" tabindex="0" data-tip="Pieces with a back image get a back page after each front page, mirrored so both sides line up after duplex printing. Use the offsets to correct a printer that shifts the back side.">?</span></div>
+                    <div class="control-group">
+                        <label for="flipEdge">Duplex flips on</label>
+                        <select id="flipEdge">
+                            <option value="long">Long edge</option>
+                            <option value="short">Short edge</option>
                         </select>
                     </div>
+                    <div class="row">
+                        <div class="control-group">
+                            <label for="backOffsetX">Back offset X (mm)</label>
+                            <input type="number" id="backOffsetX" value="0" step="0.1" data-unit="mm">
+                        </div>
+                        <div class="control-group">
+                            <label for="backOffsetY">Back offset Y (mm)</label>
+                            <input type="number" id="backOffsetY" value="0" step="0.1" data-unit="mm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-title">Export</div>
+                    <div class="button-group">
+                        <button class="btn-primary" id="downloadPdf" disabled>Download PDF</button>
+                        <button class="btn-secondary" id="downloadSvg" disabled>Download SVG cut file</button>
+                    </div>
+                    <div class="input-hint">The SVG holds the front-side outlines at the same positions as the PDF, for print-then-cut machines.</div>
                 </div>
             </div>
 
             <!-- Main content -->
             <div class="main">
-                <div class="empty-state">
-                    <div class="empty-state-icon">🗂️</div>
-                    <div>Add front (and optionally back) images in the sidebar, configure your layout options, then generate a print-ready PDF.</div>
+                <div class="preview-section">
+                    <div class="preview-title">Pieces <span id="pieceCount" class="input-hint"></span></div>
+                    <div class="piece-list" id="pieceList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🧩</div>
+                            <div>Add piece images to start. Each piece gets a size and a quantity, then everything is packed onto sheets automatically.</div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="button-group">
-                    <button class="btn-primary" id="generatePdf">Generate PDF</button>
-                </div>
+                <div class="status info" id="status">Add pieces to get started</div>
 
-                <div class="status info" id="status">Add images to get started</div>
-
-                <div class="button-group">
-                    <a id="downloadLink" class="btn btn-success download-link">Download PDF</a>
+                <div class="preview-section">
+                    <div class="sheet-toolbar">
+                        <div class="preview-title">Sheets</div>
+                        <div class="segmented" id="sideToggle" role="group" aria-label="Side to preview">
+                            <button type="button" data-side="front" aria-pressed="true">Front</button>
+                            <button type="button" data-side="back" aria-pressed="false">Back</button>
+                        </div>
+                    </div>
+                    <div class="sheet-grid" id="sheetGrid"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/dropzones.js"></script>
-    <script src="js/pdf-draw.js"></script>
+    <script src="shared/pnp-shared.js"></script>
+    <script src="js/packer.js"></script>
+    <script src="js/pieces.js"></script>
+    <script src="js/render.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
