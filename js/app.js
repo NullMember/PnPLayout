@@ -439,7 +439,11 @@ $('downloadPdf').addEventListener('click', async () => {
 $('downloadSvg').addEventListener('click', async () => {
     if (!requireLayout()) return;
     const info = exportInfo();
-    const svgs = state.layout.sheets.map((sheet) => buildSvg(sheet, info));
+    const machineMargin = num('machineMargin');
+    if (outlinesInDeadMargin(state.layout.sheets, info, machineMargin)) {
+        PnP.toast('Some outlines fall inside the cutting machine’s dead margin and won’t be cut. Widen the paper margins.', 'error');
+    }
+    const svgs = state.layout.sheets.map((sheet) => buildSvg(sheet, info, machineMargin));
     if (svgs.length === 1) {
         PnP.downloadBlob(new Blob([svgs[0]], { type: 'image/svg+xml' }), 'layout-cut.svg');
     } else {
@@ -450,8 +454,10 @@ $('downloadSvg').addEventListener('click', async () => {
 
 // ---- Sidebar & shared PnPTools wiring ------------------------------------------------------
 
-document.querySelector('.sidebar').addEventListener('input', schedulePack);
-document.querySelector('.sidebar').addEventListener('change', schedulePack);
+// The cutting-machine margin only affects the SVG export, not the packing.
+const packUnlessMachine = (e) => { if (!e.target.closest('#machinePanel')) schedulePack(); };
+document.querySelector('.sidebar').addEventListener('input', packUnlessMachine);
+document.querySelector('.sidebar').addEventListener('change', packUnlessMachine);
 PnP.units.onChange(() => renderPieceList());
 
 PnP.dropzone($('dropZone'), {
@@ -462,6 +468,7 @@ PnP.dropzone($('dropZone'), {
 
 PnP.importButton($('importSlot'), addFiles);
 PnP.bindPreset($('paperSize'), $('paperW'), $('paperH'), 'paper');
+PnP.bindMachinePreset($('machinePreset'), $('machineMargin'));
 
 let projectFiles = [];
 

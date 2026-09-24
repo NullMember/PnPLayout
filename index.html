@@ -116,6 +116,19 @@
                     </div>
                 </div>
 
+                <div class="panel" id="machinePanel">
+                    <div class="panel-title">Cutting Machine <span class="help" tabindex="0" data-tip="The strip around the mat your machine can't cut into. Cricut's is 0.25&Prime; (6.35 mm); pick Custom and type your machine's value otherwise. The SVG cut file is sized to the paper minus this margin and outlined by a guide rectangle for lining the cut up with the print.">?</span></div>
+                    <div class="control-group">
+                        <label for="machinePreset">Machine</label>
+                        <select id="machinePreset"></select>
+                    </div>
+                    <div class="control-group">
+                        <label for="machineMargin">Mat dead margin (mm)</label>
+                        <input type="number" id="machineMargin" value="6.35" min="0" step="0.01" data-unit="mm">
+                        <div class="input-hint">Keep the paper margins at least this wide so no outline falls where the machine can’t cut.</div>
+                    </div>
+                </div>
+
                 <div class="panel">
                     <div class="panel-title">Back Sides <span class="help" tabindex="0" data-tip="Pieces with a back image get a back page after each front page, mirrored so both sides line up after duplex printing. Use the offsets to correct a printer that shifts the back side.">?</span></div>
                     <div class="control-group">
@@ -143,7 +156,7 @@
                         <button class="btn-primary" id="downloadPdf" disabled>Download PDF</button>
                         <button class="btn-secondary" id="downloadSvg" disabled>Download SVG cut file</button>
                     </div>
-                    <div class="input-hint">The SVG holds the front-side outlines at the same positions as the PDF, for print-then-cut machines.</div>
+                    <div class="input-hint">The SVG holds the front-side outlines at the same positions as the PDF, inside a paper guide sized by the machine’s dead margin.</div>
                 </div>
             </div>
 

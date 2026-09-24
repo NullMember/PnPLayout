@@ -170,17 +170,23 @@ async function buildPdf(layout, info, onProgress) {
 
 // ---- SVG cut file ------------------------------------------------------------------
 
-function buildSvg(sheet, info) {
+// Sized to the machine's reachable area (paper minus dead margin) with a
+// paper guide around it; see PnP.cutSvg.
+function buildSvg(sheet, info, machineMargin) {
     const { paper, pieces } = info;
-    const paths = sheet.map((p) => {
-        const piece = pieces.get(p.pieceId);
-        return `  <path d="${pathData(outlineOnSheet(piece, p))}"/>`;
+    return PnP.cutSvg({
+        paperW: paper.w,
+        paperH: paper.h,
+        margin: machineMargin,
+        content: (toGuide) => sheet
+            .map((p) => PnP.cutPath(outlineOnSheet(pieces.get(p.pieceId), p).map(toGuide), '#000000'))
+            .join('\n'),
     });
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${paper.w}mm" height="${paper.h}mm" viewBox="0 0 ${paper.w} ${paper.h}">
- <g fill="none" stroke="#000000" stroke-width="0.25">
-${paths.join('\n')}
- </g>
-</svg>
-`;
+}
+
+// True if any outline on the sheets reaches into the machine's dead margin.
+function outlinesInDeadMargin(sheets, info, machineMargin) {
+    const { paper, pieces } = info;
+    return sheets.some((sheet) => sheet.some((p) =>
+        PnP.inDeadMargin(outlineOnSheet(pieces.get(p.pieceId), p), paper.w, paper.h, machineMargin)));
 }
