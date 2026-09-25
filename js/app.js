@@ -466,7 +466,6 @@ PnP.dropzone($('dropZone'), {
     onFiles: addFiles,
 });
 
-PnP.importButton($('importSlot'), addFiles);
 PnP.bindPreset($('paperSize'), $('paperW'), $('paperH'), 'paper');
 PnP.bindMachinePreset($('machinePreset'), $('machineMargin'));
 
