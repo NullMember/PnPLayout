@@ -420,13 +420,17 @@ function requireLayout() {
     return true;
 }
 
+// Outputs are named after the piece's image when there is only one,
+// otherwise after the project.
+const pieceFiles = () => [...state.pieces.values()].map((p) => p.front.file);
+
 $('downloadPdf').addEventListener('click', async () => {
     if (!requireLayout()) return;
     const btn = $('downloadPdf');
     btn.disabled = true;
     try {
         const bytes = await buildPdf(state.layout, exportInfo(), (msg) => setStatus(msg, 'processing'));
-        PnP.downloadBlob(new Blob([bytes], { type: 'application/pdf' }), 'layout.pdf');
+        PnP.downloadBlob(new Blob([bytes], { type: 'application/pdf' }), PnP.outputName(pieceFiles(), 'layout.pdf'));
         reportLayout(readSettings());
     } catch (err) {
         console.error(err);
@@ -444,11 +448,12 @@ $('downloadSvg').addEventListener('click', async () => {
         PnP.toast('Some outlines fall inside the cutting machine’s dead margin and won’t be cut. Widen the paper margins.', 'error');
     }
     const svgs = state.layout.sheets.map((sheet) => buildSvg(sheet, info, machineMargin));
+    const base = PnP.outputName(pieceFiles(), 'layout-cut');
     if (svgs.length === 1) {
-        PnP.downloadBlob(new Blob([svgs[0]], { type: 'image/svg+xml' }), 'layout-cut.svg');
+        PnP.downloadBlob(new Blob([svgs[0]], { type: 'image/svg+xml' }), `${base}.svg`);
     } else {
-        const zip = await PnP.zip.create(svgs.map((svg, i) => ({ name: `layout-cut-sheet-${i + 1}.svg`, data: svg })));
-        PnP.downloadBlob(zip, 'layout-cut.zip');
+        const zip = await PnP.zip.create(svgs.map((svg, i) => ({ name: `${base}-sheet-${i + 1}.svg`, data: svg })));
+        PnP.downloadBlob(zip, `${base}.zip`);
     }
 });
 
