@@ -478,7 +478,8 @@ function renderSheets() {
     const hasBacks = !state.layout.fold && [...state.pieces.values()].some((p) => p.back);
     $('sideToggle').hidden = !hasBacks;
     const side = hasBacks ? state.side : 'front';
-    const maxWidth = Math.min(420, Math.max(220, (sheetGrid.clientWidth - 24) / 2));
+    const zoom = num('sheetZoom', 100) / 100;
+    const maxWidth = Math.min(420, Math.max(220, (sheetGrid.clientWidth - 24) / 2)) * zoom;
 
     state.layout.sheets.forEach((sheet, i) => {
         const fig = document.createElement('figure');
@@ -501,6 +502,11 @@ function renderSheets() {
         sheetGrid.append(fig);
     });
 }
+
+$('sheetZoom').addEventListener('input', () => {
+    $('sheetZoomValue').textContent = `${$('sheetZoom').value}%`;
+    renderSheets();
+});
 
 $('sideToggle').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-side]');

@@ -235,9 +235,12 @@
                 <div class="preview-section">
                     <div class="sheet-toolbar">
                         <div class="preview-title">Sheets</div>
-                        <div class="segmented" id="sideToggle" role="group" aria-label="Side to preview">
-                            <button type="button" data-side="front" aria-pressed="true">Front</button>
-                            <button type="button" data-side="back" aria-pressed="false">Back</button>
+                        <div class="sheet-controls">
+                            <label class="sheet-zoom">Zoom <input type="range" id="sheetZoom" min="50" max="300" step="25" value="100" aria-label="Zoom the sheets"> <output id="sheetZoomValue">100%</output></label>
+                            <div class="segmented" id="sideToggle" role="group" aria-label="Side to preview">
+                                <button type="button" data-side="front" aria-pressed="true">Front</button>
+                                <button type="button" data-side="back" aria-pressed="false">Back</button>
+                            </div>
                         </div>
                     </div>
                     <div class="sheet-grid" id="sheetGrid"></div>

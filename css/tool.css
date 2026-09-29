@@ -167,6 +167,29 @@
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
+    overflow-x: auto; /* zoomed-in sheets scroll instead of widening the page */
+}
+
+.sheet-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.sheet-zoom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+
+.sheet-zoom input {
+    width: 110px;
+}
+
+.sheet-zoom output {
+    min-width: 3.2em;
 }
 
 .sheet {
