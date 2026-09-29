@@ -56,11 +56,38 @@ async function loadFace(file) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(full, x0, y0, w, h, 0, 0, w, h);
 
-    const face = { file, canvas, w, h, dpi: dpi || null, cache: new Map() };
+    const face = { file, full: canvas, dpi: dpi || null, preview: scaledCopy(canvas, 400) };
+    setFaceInset(face, 0);
+    return face;
+}
+
+// Images that already include bleed: `insetPx` is trimmed from every side
+// to get the piece itself (its size, mask, cut outline, footprint). The whole
+// image, bleed included, is still what gets printed (see faceComposite).
+// The inset is rectangular, as bleed added to a card is.
+function setFaceInset(face, insetPx) {
+    const limit = Math.floor((Math.min(face.full.width, face.full.height) - 2) / 2);
+    insetPx = Math.max(0, Math.min(limit, Math.round(insetPx)));
+    let canvas = face.full;
+    if (insetPx) {
+        canvas = document.createElement('canvas');
+        canvas.width = face.full.width - 2 * insetPx;
+        canvas.height = face.full.height - 2 * insetPx;
+        canvas.getContext('2d', { willReadFrequently: true }).drawImage(face.full, -insetPx, -insetPx);
+    }
+    Object.assign(face, { inset: insetPx, canvas, w: canvas.width, h: canvas.height, cache: new Map() });
     buildMask(face);
     face.outline = traceOutline(face);
-    face.preview = scaledCopy(canvas, 400);
-    return face;
+}
+
+// The whole image of a face with an inset, as a face of its own (for the
+// bleed composite). Made once.
+function fullFace(face) {
+    if (!face._full) {
+        face._full = { canvas: face.full, w: face.full.width, h: face.full.height, cache: new Map() };
+        buildMask(face._full);
+    }
+    return face._full;
 }
 
 function scaledCopy(src, maxDim) {

@@ -34,6 +34,9 @@ function readSettings() {
         spacing: Math.max(0, num('spacing')),
         cell: parseFloat($('precision').value) || 0.5,
         bleed: Math.max(0, num('bleed')),
+        imageBleed: Math.max(0, num('imageBleed')),
+        // How far artwork reaches past a piece's cut: bleed in the image plus outline bleed.
+        get reach() { return this.bleed + this.imageBleed; },
         cutOutline: $('cutOutline').checked,
         cutWidth: num('cutWidth', 0.5),
         cutColor: $('cutColor').value,
@@ -68,12 +71,34 @@ async function loadFaces(files) {
     const faces = [];
     for (const file of files) {
         try {
-            faces.push(await loadFace(file));
+            const face = await loadFace(file);
+            setFaceInset(face, imageBleedPx(face));
+            faces.push(face);
         } catch (err) {
             PnP.toast(err.message, 'error');
         }
     }
     return faces;
+}
+
+// "Images already include bleed", in this image's pixels (by its DPI).
+function imageBleedPx(face) {
+    const dpi = face.dpi || num('defaultDpi', 300) || 300;
+    return Math.max(0, num('imageBleed')) * dpi / 25.4;
+}
+
+// Trim the new amount from every loaded image. Pieces keep their print
+// scale, so a card's width shrinks by the bleed it no longer counts.
+function applyImageBleed() {
+    const faces = new Set();
+    state.pieces.forEach((p) => { faces.add(p.front); if (p.back) faces.add(p.back); });
+    const oldW = new Map([...faces].map((f) => [f, f.w]));
+    faces.forEach((f) => setFaceInset(f, imageBleedPx(f)));
+    state.pieces.forEach((p) => {
+        p.widthMm = Math.round(p.widthMm * p.front.w / oldW.get(p.front) * 10) / 10;
+    });
+    renderPieceList();
+    schedulePack();
 }
 
 // Files may carry front/back roles (from other tools or projects). Backs pair
@@ -258,7 +283,7 @@ function packJob(settings) {
     const W = Math.floor(paper.w / cell);
     const H = Math.floor(paper.h / cell);
     // The gap never drops below the bleed, so one piece's bleed can't reach another's outline.
-    const gap = Math.max(settings.spacing, settings.bleed);
+    const gap = Math.max(settings.spacing, settings.reach);
     const pad = Math.ceil(gap / 2 / cell);
     const allowed = {
         x0: Math.max(0, Math.ceil(margins.left / cell) - pad),
@@ -474,6 +499,8 @@ const packUnlessMachine = (e) => { if (!e.target.closest('#machinePanel')) sched
 document.querySelector('.sidebar').addEventListener('input', packUnlessMachine);
 document.querySelector('.sidebar').addEventListener('change', packUnlessMachine);
 PnP.units.onChange(() => renderPieceList());
+
+$('imageBleed').addEventListener('change', applyImageBleed);
 
 // Precision is for tight packing, crop marks for the grid.
 function updateModeUI() {

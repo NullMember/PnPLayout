@@ -10,7 +10,7 @@ function gridLayout(pieces, settings) {
     const list = [...pieces.values()].filter((p) => p.qty > 0);
     const { paper, margins } = settings;
     // Same rule as packing: a card's bleed never reaches another card's edge.
-    const gap = Math.max(settings.spacing, settings.bleed);
+    const gap = Math.max(settings.spacing, settings.reach);
     const areaW = paper.w - margins.left - margins.right;
     const areaH = paper.h - margins.top - margins.bottom;
     // Every cell fits the largest card; smaller cards sit in the middle of theirs.
@@ -52,7 +52,8 @@ function gridLayout(pieces, settings) {
 }
 
 // Crop marks for a grid: short lines in the margins lined up with every trim
-// edge, starting just outside the bleed. Returns [[x1, y1, x2, y2]] in mm.
+// edge, starting just outside the bleed (`bleed`: how far the artwork reaches
+// past the cut). Returns [[x1, y1, x2, y2]] in mm.
 function cropMarks(grid, paper, bleed) {
     if (!grid) return [];
     const { cols, rows, w, h, gap, x0, y0 } = grid;

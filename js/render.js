@@ -35,9 +35,13 @@ function pathData(points, scale = 1, fmt = (v) => +v.toFixed(3)) {
     return points.map(([x, y], i) => `${i ? 'L' : 'M'}${fmt(x * scale)} ${fmt(y * scale)}`).join(' ') + ' Z';
 }
 
-// Composite (face + outline bleed) for a face drawn at the front's size.
+// Composite (image + outline bleed) for a face drawn at the front's size.
+// extraMm is how far it reaches past the piece's edge on each side: the
+// bleed already in the image plus the outline bleed added here.
 function faceComposite(piece, face, bleedMm) {
-    return bleedComposite(face, bleedMm * face.w / piece.widthMm);
+    const pxPerMm = face.w / piece.widthMm;
+    const comp = bleedComposite(face.inset ? fullFace(face) : face, bleedMm * pxPerMm);
+    return { ...comp, extraMm: (face.inset + comp.bleedPx) / pxPerMm };
 }
 
 // ---- Preview ---------------------------------------------------------------------
@@ -71,8 +75,8 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         if (!face) return;
         const pos = side === 'back' ? backPlacement(p, paper, settings) : p;
         const comp = faceComposite(piece, face, bleed);
-        const wMm = piece.widthMm + 2 * bleed;
-        const hMm = pieceHeightMm(piece) + 2 * bleed;
+        const wMm = piece.widthMm + 2 * comp.extraMm;
+        const hMm = pieceHeightMm(piece) + 2 * comp.extraMm;
         ctx.save();
         ctx.translate(pos.cx, pos.cy);
         ctx.rotate((pos.angle * Math.PI) / 180);
@@ -84,7 +88,7 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         ctx.save();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = Math.max(0.25, 1 / (dpr * k)); // at least a pixel, so it shows
-        cropMarks(ctxInfo.grid, paper, bleed).forEach(([x1, y1, x2, y2]) => {
+        cropMarks(ctxInfo.grid, paper, settings.reach).forEach(([x1, y1, x2, y2]) => {
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -136,7 +140,7 @@ async function buildPdf(layout, info, onProgress) {
         if (!embedded.has(key)) {
             const comp = faceComposite(piece, face, settings.bleed);
             const blob = await PnP.canvasToBlob(comp.canvas, 'image/png');
-            embedded.set(key, await pdf.embedPng(await blob.arrayBuffer()));
+            embedded.set(key, { image: await pdf.embedPng(await blob.arrayBuffer()), extraMm: comp.extraMm });
         }
         return embedded.get(key);
     };
@@ -144,7 +148,6 @@ async function buildPdf(layout, info, onProgress) {
     const Wpt = paper.w * MM_TO_PT;
     const Hpt = paper.h * MM_TO_PT;
     const lineColor = hexToRgb01(settings.cutColor);
-    const bleed = settings.bleed;
 
     for (let s = 0; s < layout.sheets.length; s++) {
         onProgress && onProgress(`Building sheet ${s + 1} of ${layout.sheets.length}…`);
@@ -152,11 +155,11 @@ async function buildPdf(layout, info, onProgress) {
         const front = pdf.addPage([Wpt, Hpt]);
         for (const p of sheet) {
             const piece = pieces.get(p.pieceId);
-            const img = await embed(piece, piece.front);
-            drawCentered(front, img, Hpt, p.cx, p.cy, piece.widthMm + 2 * bleed, pieceHeightMm(piece) + 2 * bleed, p.angle);
+            const { image, extraMm } = await embed(piece, piece.front);
+            drawCentered(front, image, Hpt, p.cx, p.cy, piece.widthMm + 2 * extraMm, pieceHeightMm(piece) + 2 * extraMm, p.angle);
         }
         if (settings.cropMarks) {
-            cropMarks(layout.grid, paper, bleed).forEach(([x1, y1, x2, y2]) => {
+            cropMarks(layout.grid, paper, settings.reach).forEach(([x1, y1, x2, y2]) => {
                 front.drawLine({
                     start: { x: x1 * MM_TO_PT, y: Hpt - y1 * MM_TO_PT },
                     end: { x: x2 * MM_TO_PT, y: Hpt - y2 * MM_TO_PT },
@@ -182,9 +185,9 @@ async function buildPdf(layout, info, onProgress) {
             const back = pdf.addPage([Wpt, Hpt]);
             for (const p of withBacks) {
                 const piece = pieces.get(p.pieceId);
-                const img = await embed(piece, piece.back);
+                const { image, extraMm } = await embed(piece, piece.back);
                 const pos = backPlacement(p, paper, settings);
-                drawCentered(back, img, Hpt, pos.cx, pos.cy, piece.widthMm + 2 * bleed, pieceHeightMm(piece) + 2 * bleed, pos.angle);
+                drawCentered(back, image, Hpt, pos.cx, pos.cy, piece.widthMm + 2 * extraMm, pieceHeightMm(piece) + 2 * extraMm, pos.angle);
             }
         }
     }
