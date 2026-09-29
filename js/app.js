@@ -132,11 +132,51 @@ function thumb(face) {
 }
 
 function pickImage(onFile) {
+    pickImages((files) => onFile(files[0]), false);
+}
+
+function pickImages(onFiles, multiple = true) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/webp';
-    input.addEventListener('change', () => input.files[0] && onFile(input.files[0]));
+    input.multiple = multiple;
+    input.addEventListener('change', () => input.files.length && onFiles([...input.files]));
     input.click();
+}
+
+// "Ace_front.png" and "Ace back.jpg" -> "ace"; "Game_front_0003" -> "game 0003".
+function pairingName(name) {
+    return PnP.baseName(name).toLowerCase()
+        .replace(/(^|[\s_.-])(fronts?|backs?)(?=$|[\s_.-])/g, '$1')
+        .replace(/[\s_.-]+/g, ' ')
+        .trim();
+}
+
+// Put back images on pieces: one back goes on every piece; several are
+// matched by name (front/back words ignored), or else in order when the
+// counts agree. Returns how many pieces got a back.
+function attachBacks(backs) {
+    const pieces = [...state.pieces.values()];
+    if (!backs.length || !pieces.length) return 0;
+    if (backs.length === 1) {
+        pieces.forEach((p) => { p.back = backs[0]; });
+        return pieces.length;
+    }
+    const byName = new Map();
+    pieces.forEach((p) => {
+        const key = pairingName(p.front.file.name);
+        byName.set(key, byName.has(key) ? null : p); // null: the name isn't unique
+    });
+    const matched = backs.map((b) => byName.get(pairingName(b.file.name)) || null);
+    if (matched.some(Boolean)) {
+        matched.forEach((p, i) => { if (p) p.back = backs[i]; });
+        return matched.filter(Boolean).length;
+    }
+    if (backs.length === pieces.length) {
+        pieces.forEach((p, i) => { p.back = backs[i]; });
+        return pieces.length;
+    }
+    return 0;
 }
 
 function renderPieceList() {
@@ -166,7 +206,24 @@ function renderPieceList() {
         renderPieceList();
         schedulePack();
     }));
-    toolbar.append(allBack);
+    const eachBack = document.createElement('button');
+    eachBack.type = 'button';
+    eachBack.className = 'btn-secondary btn-small';
+    eachBack.textContent = 'Add backs…';
+    eachBack.title = 'Pick back images: they are matched to pieces by name (Ace_front ↔ Ace_back), or in order when there are as many backs as pieces';
+    eachBack.addEventListener('click', () => pickImages(async (files) => {
+        const backs = await loadFaces(files);
+        const attached = attachBacks(backs);
+        const pieces = state.pieces.size;
+        if (!attached) {
+            PnP.toast(`Couldn't match ${backs.length} backs to ${pieces} pieces: name them like the fronts (Ace_front / Ace_back), or add one back per piece in the same order.`, 'error');
+            return;
+        }
+        PnP.toast(attached === pieces ? `Every piece has a back.` : `${attached} of ${pieces} pieces got a back; the rest matched no back by name.`, attached === pieces ? 'success' : 'info');
+        renderPieceList();
+        schedulePack();
+    }));
+    toolbar.append(allBack, eachBack);
     pieceList.append(toolbar);
 
     state.pieces.forEach((piece) => {
