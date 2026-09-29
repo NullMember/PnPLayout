@@ -80,6 +80,19 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         ctx.restore();
     });
 
+    if (side === 'front' && settings.cropMarks) {
+        ctx.save();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = Math.max(0.25, 1 / (dpr * k)); // at least a pixel, so it shows
+        cropMarks(ctxInfo.grid, paper, bleed).forEach(([x1, y1, x2, y2]) => {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        });
+        ctx.restore();
+    }
+
     if (side === 'front' && settings.cutOutline) {
         ctx.strokeStyle = '#e03131';
         ctx.lineWidth = 0.3;
@@ -141,6 +154,16 @@ async function buildPdf(layout, info, onProgress) {
             const piece = pieces.get(p.pieceId);
             const img = await embed(piece, piece.front);
             drawCentered(front, img, Hpt, p.cx, p.cy, piece.widthMm + 2 * bleed, pieceHeightMm(piece) + 2 * bleed, p.angle);
+        }
+        if (settings.cropMarks) {
+            cropMarks(layout.grid, paper, bleed).forEach(([x1, y1, x2, y2]) => {
+                front.drawLine({
+                    start: { x: x1 * MM_TO_PT, y: Hpt - y1 * MM_TO_PT },
+                    end: { x: x2 * MM_TO_PT, y: Hpt - y2 * MM_TO_PT },
+                    thickness: 0.5,
+                    color: PDFLib.rgb(0, 0, 0),
+                });
+            });
         }
         if (settings.cutOutline) {
             for (const p of sheet) {

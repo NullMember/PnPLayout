@@ -6,7 +6,7 @@ const ROTATIONS = [0, 45, 90, 135, 180, 225, 270, 315];
 const state = {
     pieces: new Map(), // id -> { id, name, front, back, widthMm, qty, rotate }
     nextId: 1,
-    layout: null,      // { sheets: [[{ pieceId, angle, cx, cy }]], unplaced: { pieceId: n } }
+    layout: null,      // { sheets: [[{ pieceId, angle, cx, cy }]], unplaced: { pieceId: n }, grid? }
     side: 'front',
 };
 
@@ -29,6 +29,8 @@ function readSettings() {
     return {
         paper: { w: num('paperW', 210), h: num('paperH', 297) },
         margins: { top: num('marginTop'), bottom: num('marginBottom'), left: num('marginLeft'), right: num('marginRight') },
+        mode: $('packMode').value,
+        cropMarks: $('packMode').value === 'grid' && $('cropMarks').checked,
         spacing: Math.max(0, num('spacing')),
         cell: parseFloat($('precision').value) || 0.5,
         bleed: Math.max(0, num('bleed')),
@@ -286,6 +288,12 @@ function runPack() {
         setStatus('Add pieces to get started', 'info');
         return;
     }
+    if (settings.mode === 'grid') {
+        state.layout = gridLayout(state.pieces, settings);
+        renderSheets();
+        reportLayout(settings);
+        return;
+    }
     setStatus('Packing…', 'processing');
 
     let job;
@@ -359,7 +367,8 @@ function reportLayout(settings) {
     const fill = Math.round((used / (printable * sheets.length)) * 100);
     const backs = sheets.filter((s) => s.some((p) => state.pieces.get(p.pieceId).back)).length;
     const pages = sheets.length + backs;
-    setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s)) · ${fill}% of the printable area used`, 'success');
+    const grid = state.layout.grid ? ` · ${state.layout.grid.cols} × ${state.layout.grid.rows} per sheet` : '';
+    setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% of the printable area used`, 'success');
 }
 
 // ---- Sheet previews ------------------------------------------------------------------
@@ -384,6 +393,7 @@ function renderSheets() {
             settings,
             side,
             maxWidth,
+            grid: state.layout.grid,
         });
         const cap = document.createElement('figcaption');
         cap.textContent = `Sheet ${i + 1}${side === 'back' ? ' · back' : ''} · ${sheet.length} piece(s)`;
@@ -464,6 +474,16 @@ const packUnlessMachine = (e) => { if (!e.target.closest('#machinePanel')) sched
 document.querySelector('.sidebar').addEventListener('input', packUnlessMachine);
 document.querySelector('.sidebar').addEventListener('change', packUnlessMachine);
 PnP.units.onChange(() => renderPieceList());
+
+// Precision is for tight packing, crop marks for the grid.
+function updateModeUI() {
+    const grid = $('packMode').value === 'grid';
+    $('precisionGroup').hidden = grid;
+    $('cropMarksGroup').hidden = !grid;
+}
+$('packMode').addEventListener('change', updateModeUI);
+PnP.settings.onApply(updateModeUI);
+updateModeUI();
 
 PnP.dropzone($('dropZone'), {
     input: $('imageInput'),
