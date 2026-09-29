@@ -17,6 +17,17 @@ function backPlacement(p, paper, settings) {
         : { cx: p.cx + settings.backOffsetX, cy: paper.h - p.cy + settings.backOffsetY, angle: 180 - p.angle };
 }
 
+// Crop marks for a page: the front's, or on a back page mirrored like the
+// backs (so they fall behind the front's marks: hold the sheet to the light
+// to check the duplex alignment).
+function pageMarks(layout, paper, settings, side) {
+    if (!settings.cropMarks || !layout) return [];
+    const marks = cropMarks(layout.grid, paper, settings.reach, layout.fold);
+    if (side !== 'back') return marks;
+    const at = (x, y) => { const b = backPlacement({ cx: x, cy: y, angle: 0 }, paper, settings); return [b.cx, b.cy]; };
+    return marks.map(([x1, y1, x2, y2]) => [...at(x1, y1), ...at(x2, y2)]);
+}
+
 // The piece's cut outline, placed on the sheet (mm): the face's traced
 // outline, or for rectangular images a rectangle with `cornerRadius` mm
 // rounded corners (card corners the image doesn't show).
@@ -106,11 +117,11 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         ctx.restore();
     });
 
-    if (side === 'front' && settings.cropMarks) {
+    if (settings.cropMarks) {
         ctx.save();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = Math.max(0.25, 1 / (dpr * k)); // at least a pixel, so it shows
-        cropMarks(ctxInfo.grid, paper, settings.reach, fold).forEach(([x1, y1, x2, y2]) => {
+        pageMarks({ grid: ctxInfo.grid, fold }, paper, settings, side).forEach(([x1, y1, x2, y2]) => {
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -166,6 +177,17 @@ function drawCentered(page, image, pageHpt, cxMm, cyMm, wMm, hMm, angle) {
     });
 }
 
+function drawMarks(page, marks, pageHpt) {
+    marks.forEach(([x1, y1, x2, y2]) => {
+        page.drawLine({
+            start: { x: x1 * MM_TO_PT, y: pageHpt - y1 * MM_TO_PT },
+            end: { x: x2 * MM_TO_PT, y: pageHpt - y2 * MM_TO_PT },
+            thickness: 0.5,
+            color: PDFLib.rgb(0, 0, 0),
+        });
+    });
+}
+
 async function buildPdf(layout, info, onProgress) {
     const { paper, pieces, settings } = info;
     const pdf = await PDFLib.PDFDocument.create();
@@ -208,16 +230,7 @@ async function buildPdf(layout, info, onProgress) {
                 dashArray: FOLD_DASH.map((v) => v * MM_TO_PT),
             });
         }
-        if (settings.cropMarks) {
-            cropMarks(layout.grid, paper, settings.reach, layout.fold).forEach(([x1, y1, x2, y2]) => {
-                front.drawLine({
-                    start: { x: x1 * MM_TO_PT, y: Hpt - y1 * MM_TO_PT },
-                    end: { x: x2 * MM_TO_PT, y: Hpt - y2 * MM_TO_PT },
-                    thickness: 0.5,
-                    color: PDFLib.rgb(0, 0, 0),
-                });
-            });
-        }
+        drawMarks(front, pageMarks(layout, paper, settings, 'front'), Hpt);
         if (settings.cutOutline) {
             for (const p of sheet) {
                 const piece = pieces.get(p.pieceId);
@@ -240,6 +253,7 @@ async function buildPdf(layout, info, onProgress) {
                 const pos = backPlacement(p, paper, settings);
                 drawCentered(back, image, Hpt, pos.cx, pos.cy, piece.widthMm + 2 * extraMm, pieceHeightMm(piece) + 2 * extraMm, pos.angle);
             }
+            drawMarks(back, pageMarks(layout, paper, settings, 'back'), Hpt);
         }
     }
     return pdf.save();
