@@ -133,7 +133,7 @@ async function addFiles(files) {
         addPiece(face, back);
     });
     if (backs.length > 1 && backs.length !== fronts.length) {
-        PnP.toast(`Got ${fronts.length} fronts but ${backs.length} backs, so backs were not attached. Add them per piece.`, 'error');
+        PnP.toast(`${fronts.length} fronts but ${backs.length} backs: backs not attached.`, 'error');
     }
     renderPieceList();
     schedulePack();
@@ -227,13 +227,13 @@ function renderPieceList() {
     eachBack.type = 'button';
     eachBack.className = 'btn-secondary btn-small';
     eachBack.textContent = 'Add backs…';
-    eachBack.title = 'Pick back images: they are matched to pieces by name (Ace_front ↔ Ace_back), or in order when there are as many backs as pieces';
+    eachBack.title = 'Matched to pieces by name (Ace_front ↔ Ace_back), or in order';
     eachBack.addEventListener('click', () => pickImages(async (files) => {
         const backs = await loadFaces(files);
         const attached = attachBacks(backs);
         const pieces = state.pieces.size;
         if (!attached) {
-            PnP.toast(`Couldn't match ${backs.length} backs to ${pieces} pieces: name them like the fronts (Ace_front / Ace_back), or add one back per piece in the same order.`, 'error');
+            PnP.toast(`Couldn't match ${backs.length} backs to ${pieces} pieces. Name them like the fronts, or add one per piece.`, 'error');
             return;
         }
         PnP.toast(attached === pieces ? `Every piece has a back.` : `${attached} of ${pieces} pieces got a back; the rest matched no back by name.`, attached === pieces ? 'success' : 'info');
@@ -480,7 +480,7 @@ function reportLayout(settings) {
         setStatus(`A ${cols} × ${rows} grid doesn't fit the printable area; using the most that fits: ${state.layout.grid.cols} × ${state.layout.grid.rows}.`, 'error');
         return;
     }
-    setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% of the printable area used`, 'success');
+    setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% used`, 'success');
 }
 
 // ---- Sheet previews ------------------------------------------------------------------
@@ -576,7 +576,7 @@ $('downloadSvg').addEventListener('click', async () => {
     const info = exportInfo();
     const machineMargin = num('machineMargin');
     if (outlinesInDeadMargin(state.layout.sheets, info, machineMargin)) {
-        PnP.toast('Some outlines fall inside the cutting machine’s dead margin and won’t be cut. Widen the paper margins.', 'error');
+        PnP.toast('Some outlines are in the mat’s dead margin and won’t be cut. Widen the paper margins.', 'error');
     }
     const svgs = state.layout.sheets.map((sheet) => buildSvg(sheet, info, machineMargin));
     const base = PnP.outputName(pieceFiles(), 'layout-cut');
