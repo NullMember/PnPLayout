@@ -62,6 +62,8 @@ function faceComposite(piece, face, bleedMm) {
 
 // ---- Preview ---------------------------------------------------------------------
 
+const FOLD_DASH = [3, 2]; // mm, dashes of the fold line
+
 function drawSheetPreview(canvas, sheet, ctxInfo) {
     const { paper, margins, pieces, settings, side, maxWidth } = ctxInfo;
     const k = maxWidth / paper.w; // px per mm
@@ -84,12 +86,16 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
     ctx.restore();
 
     const bleed = settings.bleed;
-    sheet.forEach((p) => {
+    const { fold } = ctxInfo;
+    // Folded layouts show the backs next to the fronts, on the same page.
+    const draws = sheet.map((p) => [p, side === 'back' ? 'back' : 'front']);
+    if (fold && side === 'front') fold.backs[ctxInfo.index].forEach((p) => draws.push([p, 'back', true]));
+    draws.forEach(([p, which, placed]) => {
         const piece = pieces.get(p.pieceId);
         if (!piece) return;
-        const face = side === 'back' ? piece.back : piece.front;
+        const face = which === 'back' ? piece.back : piece.front;
         if (!face) return;
-        const pos = side === 'back' ? backPlacement(p, paper, settings) : p;
+        const pos = which === 'back' && !placed ? backPlacement(p, paper, settings) : p;
         const comp = faceComposite(piece, face, bleed);
         const wMm = piece.widthMm + 2 * comp.extraMm;
         const hMm = pieceHeightMm(piece) + 2 * comp.extraMm;
@@ -104,12 +110,25 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         ctx.save();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = Math.max(0.25, 1 / (dpr * k)); // at least a pixel, so it shows
-        cropMarks(ctxInfo.grid, paper, settings.reach).forEach(([x1, y1, x2, y2]) => {
+        cropMarks(ctxInfo.grid, paper, settings.reach, fold).forEach(([x1, y1, x2, y2]) => {
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
             ctx.stroke();
         });
+        ctx.restore();
+    }
+
+    if (fold && side === 'front') {
+        const [x1, y1, x2, y2] = foldLine(fold, paper, margins);
+        ctx.save();
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = Math.max(0.3, 1 / (dpr * k));
+        ctx.setLineDash(FOLD_DASH);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
         ctx.restore();
     }
 
@@ -174,8 +193,23 @@ async function buildPdf(layout, info, onProgress) {
             const { image, extraMm } = await embed(piece, piece.front);
             drawCentered(front, image, Hpt, p.cx, p.cy, piece.widthMm + 2 * extraMm, pieceHeightMm(piece) + 2 * extraMm, p.angle);
         }
+        if (layout.fold) {
+            for (const p of layout.fold.backs[s]) {
+                const piece = pieces.get(p.pieceId);
+                const { image, extraMm } = await embed(piece, piece.back);
+                drawCentered(front, image, Hpt, p.cx, p.cy, piece.widthMm + 2 * extraMm, pieceHeightMm(piece) + 2 * extraMm, p.angle);
+            }
+            const [x1, y1, x2, y2] = foldLine(layout.fold, paper, settings.margins);
+            front.drawLine({
+                start: { x: x1 * MM_TO_PT, y: Hpt - y1 * MM_TO_PT },
+                end: { x: x2 * MM_TO_PT, y: Hpt - y2 * MM_TO_PT },
+                thickness: 0.5,
+                color: PDFLib.rgb(0.33, 0.33, 0.33),
+                dashArray: FOLD_DASH.map((v) => v * MM_TO_PT),
+            });
+        }
         if (settings.cropMarks) {
-            cropMarks(layout.grid, paper, settings.reach).forEach(([x1, y1, x2, y2]) => {
+            cropMarks(layout.grid, paper, settings.reach, layout.fold).forEach(([x1, y1, x2, y2]) => {
                 front.drawLine({
                     start: { x: x1 * MM_TO_PT, y: Hpt - y1 * MM_TO_PT },
                     end: { x: x2 * MM_TO_PT, y: Hpt - y2 * MM_TO_PT },
@@ -196,7 +230,8 @@ async function buildPdf(layout, info, onProgress) {
             }
         }
 
-        const withBacks = sheet.filter((p) => pieces.get(p.pieceId).back);
+        // Folded layouts have their backs on the front page already.
+        const withBacks = layout.fold ? [] : sheet.filter((p) => pieces.get(p.pieceId).back);
         if (withBacks.length) {
             const back = pdf.addPage([Wpt, Hpt]);
             for (const p of withBacks) {

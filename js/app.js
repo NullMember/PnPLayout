@@ -30,7 +30,9 @@ function readSettings() {
         paper: { w: num('paperW', 210), h: num('paperH', 297) },
         margins: { top: num('marginTop'), bottom: num('marginBottom'), left: num('marginLeft'), right: num('marginRight') },
         mode: $('packMode').value,
-        cropMarks: $('packMode').value === 'grid' && $('cropMarks').checked,
+        cropMarks: $('packMode').value !== 'tight' && $('cropMarks').checked,
+        foldDirection: $('foldDirection').value,
+        foldGap: Math.max(0, num('foldGap')),
         spacing: Math.max(0, num('spacing')),
         cell: parseFloat($('precision').value) || 0.5,
         bleed: Math.max(0, num('bleed')),
@@ -371,8 +373,8 @@ function runPack() {
         setStatus('Add pieces to get started', 'info');
         return;
     }
-    if (settings.mode === 'grid') {
-        state.layout = gridLayout(state.pieces, settings);
+    if (settings.mode === 'grid' || settings.mode === 'fold') {
+        state.layout = (settings.mode === 'fold' ? foldLayout : gridLayout)(state.pieces, settings);
         renderSheets();
         reportLayout(settings);
         return;
@@ -448,9 +450,12 @@ function reportLayout(settings) {
         used += piece.front.area * (piece.widthMm / piece.front.w) * (pieceHeightMm(piece) / piece.front.h);
     }));
     const fill = Math.round((used / (printable * sheets.length)) * 100);
-    const backs = sheets.filter((s) => s.some((p) => state.pieces.get(p.pieceId).back)).length;
+    const backs = state.layout.fold ? 0 : sheets.filter((s) => s.some((p) => state.pieces.get(p.pieceId).back)).length;
     const pages = sheets.length + backs;
-    const grid = state.layout.grid ? ` · ${state.layout.grid.cols} × ${state.layout.grid.rows} per sheet` : '';
+    const { fold } = state.layout;
+    const grid = state.layout.grid
+        ? ` · ${state.layout.grid.cols} × ${state.layout.grid.rows} per sheet${fold ? `, backs across a ${fold.dir} fold` : ''}`
+        : '';
     setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% of the printable area used`, 'success');
 }
 
@@ -460,7 +465,8 @@ function renderSheets() {
     sheetGrid.innerHTML = '';
     if (!state.layout || !state.layout.sheets.length) return;
     const settings = readSettings();
-    const hasBacks = [...state.pieces.values()].some((p) => p.back);
+    // Folded layouts print the backs beside the fronts: there's no back side to show.
+    const hasBacks = !state.layout.fold && [...state.pieces.values()].some((p) => p.back);
     $('sideToggle').hidden = !hasBacks;
     const side = hasBacks ? state.side : 'front';
     const maxWidth = Math.min(420, Math.max(220, (sheetGrid.clientWidth - 24) / 2));
@@ -477,6 +483,8 @@ function renderSheets() {
             side,
             maxWidth,
             grid: state.layout.grid,
+            fold: state.layout.fold,
+            index: i,
         });
         const cap = document.createElement('figcaption');
         cap.textContent = `Sheet ${i + 1}${side === 'back' ? ' · back' : ''} · ${sheet.length} piece(s)`;
@@ -560,11 +568,13 @@ PnP.units.onChange(() => renderPieceList());
 
 $('imageBleed').addEventListener('change', applyImageBleed);
 
-// Precision is for tight packing, crop marks for the grid.
+// Precision is for tight packing, crop marks for grid and fold, the fold's
+// settings for fold.
 function updateModeUI() {
-    const grid = $('packMode').value === 'grid';
-    $('precisionGroup').hidden = grid;
-    $('cropMarksGroup').hidden = !grid;
+    const mode = $('packMode').value;
+    $('precisionGroup').hidden = mode !== 'tight';
+    $('cropMarksGroup').hidden = mode === 'tight';
+    $('foldGroup').hidden = mode !== 'fold';
 }
 $('packMode').addEventListener('change', updateModeUI);
 PnP.settings.onApply(updateModeUI);
