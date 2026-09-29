@@ -38,6 +38,7 @@ function readSettings() {
         // How far artwork reaches past a piece's cut: bleed in the image plus outline bleed.
         get reach() { return this.bleed + this.imageBleed; },
         cutOutline: $('cutOutline').checked,
+        cornerRadius: Math.max(0, num('cornerRadius')),
         cutWidth: num('cutWidth', 0.5),
         cutColor: $('cutColor').value,
         flipEdge: $('flipEdge').value,

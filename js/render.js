@@ -17,18 +17,34 @@ function backPlacement(p, paper, settings) {
         : { cx: p.cx + settings.backOffsetX, cy: paper.h - p.cy + settings.backOffsetY, angle: 180 - p.angle };
 }
 
-// The face's traced outline, placed on the sheet (mm).
-function outlineOnSheet(piece, p) {
+// The piece's cut outline, placed on the sheet (mm): the face's traced
+// outline, or for rectangular images a rectangle with `cornerRadius` mm
+// rounded corners (card corners the image doesn't show).
+function outlineOnSheet(piece, p, cornerRadius = 0) {
     const face = piece.front;
     const wMm = piece.widthMm;
     const hMm = pieceHeightMm(piece);
     const rad = (p.angle * Math.PI) / 180;
     const cos = Math.cos(rad), sin = Math.sin(rad);
-    return face.outline.map(([x, y]) => {
-        const lx = (x / face.w - 0.5) * wMm;
-        const ly = (y / face.h - 0.5) * hMm;
-        return [p.cx + lx * cos - ly * sin, p.cy + lx * sin + ly * cos];
+    const local = face.isRect && cornerRadius > 0
+        ? roundedRect(wMm, hMm, cornerRadius)
+        : face.outline.map(([x, y]) => [(x / face.w - 0.5) * wMm, (y / face.h - 0.5) * hMm]);
+    return local.map(([lx, ly]) => [p.cx + lx * cos - ly * sin, p.cy + lx * sin + ly * cos]);
+}
+
+// A w × h rectangle centred on 0, 0 with corners of radius r, as a polygon
+// (each corner in 12 steps: smooth enough for a cutting machine).
+function roundedRect(w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    const corners = [[w / 2 - r, -h / 2 + r, -90], [w / 2 - r, h / 2 - r, 0], [-w / 2 + r, h / 2 - r, 90], [-w / 2 + r, -h / 2 + r, 180]];
+    const pts = [];
+    corners.forEach(([cx, cy, start]) => {
+        for (let i = 0; i <= 12; i++) {
+            const a = ((start + (90 * i) / 12) * Math.PI) / 180;
+            pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+        }
     });
+    return pts;
 }
 
 function pathData(points, scale = 1, fmt = (v) => +v.toFixed(3)) {
@@ -103,7 +119,7 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         sheet.forEach((p) => {
             const piece = pieces.get(p.pieceId);
             if (!piece) return;
-            ctx.stroke(new Path2D(pathData(outlineOnSheet(piece, p))));
+            ctx.stroke(new Path2D(pathData(outlineOnSheet(piece, p, settings.cornerRadius))));
         });
     }
 }
@@ -171,7 +187,7 @@ async function buildPdf(layout, info, onProgress) {
         if (settings.cutOutline) {
             for (const p of sheet) {
                 const piece = pieces.get(p.pieceId);
-                front.drawSvgPath(pathData(outlineOnSheet(piece, p), MM_TO_PT), {
+                front.drawSvgPath(pathData(outlineOnSheet(piece, p, settings.cornerRadius), MM_TO_PT), {
                     x: 0,
                     y: Hpt,
                     borderColor: lineColor,
@@ -199,20 +215,20 @@ async function buildPdf(layout, info, onProgress) {
 // Sized to the machine's reachable area (paper minus dead margin) with a
 // paper guide around it; see PnP.cutSvg.
 function buildSvg(sheet, info, machineMargin) {
-    const { paper, pieces } = info;
+    const { paper, pieces, settings } = info;
     return PnP.cutSvg({
         paperW: paper.w,
         paperH: paper.h,
         margin: machineMargin,
         content: (toGuide) => sheet
-            .map((p) => PnP.cutPath(outlineOnSheet(pieces.get(p.pieceId), p).map(toGuide), '#000000'))
+            .map((p) => PnP.cutPath(outlineOnSheet(pieces.get(p.pieceId), p, settings.cornerRadius).map(toGuide), '#000000'))
             .join('\n'),
     });
 }
 
 // True if any outline on the sheets reaches into the machine's dead margin.
 function outlinesInDeadMargin(sheets, info, machineMargin) {
-    const { paper, pieces } = info;
+    const { paper, pieces, settings } = info;
     return sheets.some((sheet) => sheet.some((p) =>
-        PnP.inDeadMargin(outlineOnSheet(pieces.get(p.pieceId), p), paper.w, paper.h, machineMargin)));
+        PnP.inDeadMargin(outlineOnSheet(pieces.get(p.pieceId), p, settings.cornerRadius), paper.w, paper.h, machineMargin)));
 }
