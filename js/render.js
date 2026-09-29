@@ -62,13 +62,12 @@ function pathData(points, scale = 1, fmt = (v) => +v.toFixed(3)) {
     return points.map(([x, y], i) => `${i ? 'L' : 'M'}${fmt(x * scale)} ${fmt(y * scale)}`).join(' ') + ' Z';
 }
 
-// Composite (image + outline bleed) for a face drawn at the front's size.
-// extraMm is how far it reaches past the piece's edge on each side: the
-// bleed already in the image plus the outline bleed added here.
-function faceComposite(piece, face, bleedMm) {
+// What gets printed for a face drawn at the front's size: the whole image.
+// extraMm is how far it reaches past the piece's edge on each side (the
+// bleed already in the image; Layout adds none).
+function faceComposite(piece, face) {
     const pxPerMm = face.w / piece.widthMm;
-    const comp = bleedComposite(face.inset ? fullFace(face) : face, bleedMm * pxPerMm);
-    return { ...comp, extraMm: (face.inset + comp.bleedPx) / pxPerMm };
+    return { canvas: face.full, preview: face.preview, extraMm: face.inset / pxPerMm };
 }
 
 // ---- Preview ---------------------------------------------------------------------
@@ -96,7 +95,6 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
     ctx.strokeRect(margins.left, margins.top, paper.w - margins.left - margins.right, paper.h - margins.top - margins.bottom);
     ctx.restore();
 
-    const bleed = settings.bleed;
     const { fold } = ctxInfo;
     // Folded layouts show the backs next to the fronts, on the same page.
     const draws = sheet.map((p) => [p, side === 'back' ? 'back' : 'front']);
@@ -107,7 +105,7 @@ function drawSheetPreview(canvas, sheet, ctxInfo) {
         const face = which === 'back' ? piece.back : piece.front;
         if (!face) return;
         const pos = which === 'back' && !placed ? backPlacement(p, paper, settings) : p;
-        const comp = faceComposite(piece, face, bleed);
+        const comp = faceComposite(piece, face);
         const wMm = piece.widthMm + 2 * comp.extraMm;
         const hMm = pieceHeightMm(piece) + 2 * comp.extraMm;
         ctx.save();
@@ -195,7 +193,7 @@ async function buildPdf(layout, info, onProgress) {
     const embed = async (piece, face) => {
         const key = face === piece.front ? `${piece.id}:f` : `${piece.id}:b`;
         if (!embedded.has(key)) {
-            const comp = faceComposite(piece, face, settings.bleed);
+            const comp = faceComposite(piece, face);
             const blob = await PnP.canvasToBlob(comp.canvas, 'image/png');
             embedded.set(key, { image: await pdf.embedPng(await blob.arrayBuffer()), extraMm: comp.extraMm });
         }

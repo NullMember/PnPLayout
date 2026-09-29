@@ -39,10 +39,9 @@ function readSettings() {
         foldGap: Math.max(0, num('foldGap')),
         spacing: Math.max(0, num('spacing')),
         cell: parseFloat($('precision').value) || 0.5,
-        bleed: Math.max(0, num('bleed')),
         imageBleed: Math.max(0, num('imageBleed')),
-        // How far artwork reaches past a piece's cut: bleed in the image plus outline bleed.
-        get reach() { return this.bleed + this.imageBleed; },
+        // How far artwork reaches past a piece's cut: the most bleed any image has.
+        reach: maxImageBleedMm(),
         cutOutline: $('cutOutline').checked,
         cornerRadius: Math.max(0, num('cornerRadius')),
         cutWidth: num('cutWidth', 0.5),
@@ -88,10 +87,21 @@ async function loadFaces(files) {
     return faces;
 }
 
-// "Images already include bleed", in this image's pixels (by its DPI).
+// The bleed already in an image, in its pixels (by its DPI): what Bleed
+// recorded in it, else the "Images already include bleed" setting.
 function imageBleedPx(face) {
     const dpi = face.dpi || num('defaultDpi', 300) || 300;
-    return Math.max(0, num('imageBleed')) * dpi / 25.4;
+    const mm = face.bleedMm !== null ? face.bleedMm : Math.max(0, num('imageBleed'));
+    return mm * dpi / 25.4;
+}
+
+// The most bleed any piece's images have, in mm at the piece's size.
+function maxImageBleedMm() {
+    let most = 0;
+    state.pieces.forEach((p) => [p.front, p.back].forEach((f) => {
+        if (f) most = Math.max(most, f.inset / f.w * p.widthMm);
+    }));
+    return most;
 }
 
 // Trim the new amount from every loaded image. Pieces keep their print
@@ -587,6 +597,24 @@ document.querySelector('.sidebar').addEventListener('change', packUnlessMachine)
 PnP.units.onChange(() => renderPieceList());
 
 $('imageBleed').addEventListener('change', applyImageBleed);
+
+// Bleed is Bleed's job: pieces go there (backs too) and come back.
+PnP.sendMenu($('sendSlot'), {
+    from: 'Layout',
+    targets: ['PnPBleed'],
+    getItems: () => {
+        const items = [];
+        const seen = new Set();
+        state.pieces.forEach((p) => {
+            items.push({ name: p.front.file.name, blob: p.front.file, role: 'front' });
+            if (p.back && !seen.has(p.back)) {
+                seen.add(p.back);
+                items.push({ name: p.back.file.name, blob: p.back.file, role: 'back' });
+            }
+        });
+        return items;
+    },
+});
 
 // Precision is for tight packing, crop marks for grid and fold, the fold's
 // settings for fold.

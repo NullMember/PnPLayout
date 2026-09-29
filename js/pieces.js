@@ -1,6 +1,7 @@
 // Piece images: loading (with DPI detection and transparent-border trimming),
-// the alpha mask, the traced cut outline, the outline-bleed composite and the
-// rotated/dilated packing footprints.
+// finding the piece inside bleed the image already has, the alpha mask, the
+// traced cut outline and the rotated/dilated packing footprints. Layout
+// doesn't add bleed: that's Bleed's job.
 
 const ALPHA_THRESHOLD = 128; // alpha at or above this counts as part of the piece
 const DEFAULT_DPI = 300;
@@ -27,7 +28,7 @@ function loadBitmap(file) {
 
 // A "face" is one side of a piece: the trimmed image plus derived data.
 async function loadFace(file) {
-    const [img, dpi] = await Promise.all([loadBitmap(file), readImageDpi(file)]);
+    const [img, dpi, bleedNote] = await Promise.all([loadBitmap(file), readImageDpi(file), PnP.readPngText(file, 'PnPTools:bleed')]);
     const full = document.createElement('canvas');
     full.width = img.naturalWidth;
     full.height = img.naturalHeight;
@@ -56,38 +57,77 @@ async function loadFace(file) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(full, x0, y0, w, h, 0, 0, w, h);
 
-    const face = { file, full: canvas, dpi: dpi || null, preview: scaledCopy(canvas, 400) };
+    // bleedMm: the bleed Bleed recorded in the image (null if none recorded).
+    const bleedMm = bleedNote !== null && Number.isFinite(parseFloat(bleedNote)) ? parseFloat(bleedNote) : null;
+    const face = { file, full: canvas, dpi: dpi || null, bleedMm, preview: scaledCopy(canvas, 400) };
     setFaceInset(face, 0);
     return face;
 }
 
-// Images that already include bleed: `insetPx` is trimmed from every side
-// to get the piece itself (its size, mask, cut outline, footprint). The whole
-// image, bleed included, is still what gets printed (see faceComposite).
-// The inset is rectangular, as bleed added to a card is.
+// Images that already include bleed: `insetPx` is trimmed off all round to
+// get the piece itself (its size, mask, cut outline, footprint). A card
+// loses a strip from each side; a shape (bleed that follows its outline)
+// shrinks by that much all round. The whole image, bleed included, is still
+// what gets printed (see faceComposite).
 function setFaceInset(face, insetPx) {
-    const limit = Math.floor((Math.min(face.full.width, face.full.height) - 2) / 2);
+    const full = fullFace(face);
+    const limit = Math.floor((Math.min(full.w, full.h) - 2) / 2);
     insetPx = Math.max(0, Math.min(limit, Math.round(insetPx)));
     let canvas = face.full;
     if (insetPx) {
         canvas = document.createElement('canvas');
-        canvas.width = face.full.width - 2 * insetPx;
-        canvas.height = face.full.height - 2 * insetPx;
+        canvas.width = full.w - 2 * insetPx;
+        canvas.height = full.h - 2 * insetPx;
         canvas.getContext('2d', { willReadFrequently: true }).drawImage(face.full, -insetPx, -insetPx);
     }
     Object.assign(face, { inset: insetPx, canvas, w: canvas.width, h: canvas.height, cache: new Map() });
-    buildMask(face);
+    if (insetPx && !full.isRect) {
+        // The shape inside its bleed: the whole image's mask eroded by the inset.
+        const eroded = erodeMask(full.mask, full.w, full.h, insetPx);
+        const mask = new Uint8Array(face.w * face.h);
+        for (let y = 0; y < face.h; y++) {
+            mask.set(eroded.subarray((y + insetPx) * full.w + insetPx, (y + insetPx) * full.w + insetPx + face.w), y * face.w);
+        }
+        buildMask(face, mask);
+    } else {
+        buildMask(face);
+    }
     face.outline = traceOutline(face);
 }
 
-// The whole image of a face with an inset, as a face of its own (for the
-// bleed composite). Made once.
+// The whole image (transparent border trimmed), as a face of its own. Made once.
 function fullFace(face) {
     if (!face._full) {
-        face._full = { canvas: face.full, w: face.full.width, h: face.full.height, cache: new Map() };
+        face._full = { canvas: face.full, w: face.full.width, h: face.full.height };
         buildMask(face._full);
     }
     return face._full;
+}
+
+// Mask pixels further than r from the shape's edge (two-pass 3-4 chamfer
+// distance, within a few percent of the true distance).
+function erodeMask(mask, w, h, r) {
+    const INF = 1e9;
+    const d = new Float64Array(w * h);
+    for (let i = 0; i < w * h; i++) d[i] = mask[i] ? INF : 0;
+    const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : d[y * w + x]);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            if (!d[i]) continue;
+            d[i] = Math.min(d[i], at(x - 1, y) + 3, at(x, y - 1) + 3, at(x - 1, y - 1) + 4, at(x + 1, y - 1) + 4);
+        }
+    }
+    for (let y = h - 1; y >= 0; y--) {
+        for (let x = w - 1; x >= 0; x--) {
+            const i = y * w + x;
+            if (!d[i]) continue;
+            d[i] = Math.min(d[i], at(x + 1, y) + 3, at(x, y + 1) + 3, at(x + 1, y + 1) + 4, at(x - 1, y + 1) + 4);
+        }
+    }
+    const out = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) out[i] = d[i] > 3 * r ? 1 : 0;
+    return out;
 }
 
 function scaledCopy(src, maxDim) {
@@ -101,16 +141,18 @@ function scaledCopy(src, maxDim) {
 
 // ---- Mask ------------------------------------------------------------------------
 
-// face.mask: Uint8Array (1 = piece) and face.maskCanvas: black where the piece is.
-function buildMask(face) {
+// face.mask: Uint8Array (1 = piece) and face.maskCanvas: black where the
+// piece is. The mask comes from the image's alpha unless one is given.
+function buildMask(face, given = null) {
     const { w, h, canvas } = face;
-    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-    const mask = new Uint8Array(w * h);
-    let transparent = 0;
-    for (let i = 0; i < w * h; i++) {
-        if (data[i * 4 + 3] >= ALPHA_THRESHOLD) mask[i] = 1;
-        else transparent++;
+    let mask = given;
+    if (!mask) {
+        const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+        mask = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) if (data[i * 4 + 3] >= ALPHA_THRESHOLD) mask[i] = 1;
     }
+    let transparent = 0;
+    for (let i = 0; i < w * h; i++) if (!mask[i]) transparent++;
     face.mask = mask;
     face.isRect = transparent === 0;
     face.area = w * h - transparent;
@@ -244,86 +286,6 @@ function simplifyPolygon(pts, tolerance) {
     const first = dp(pts.slice(0, far + 1));
     const second = dp(pts.slice(far).concat([pts[0]]));
     return first.slice(0, -1).concat(second.slice(0, -1));
-}
-
-// ---- Outline bleed composite -----------------------------------------------------
-
-// The face padded by `bleedPx` on every side, with edge colours pushed
-// outward into the transparent surroundings (breadth-first, one pixel ring
-// per step), and the original drawn on top. Cached per bleed size.
-function bleedComposite(face, bleedPx) {
-    bleedPx = Math.max(0, Math.round(bleedPx));
-    const key = `bleed:${bleedPx}`;
-    if (face.cache.has(key)) return face.cache.get(key);
-
-    const W = face.w + 2 * bleedPx;
-    const H = face.h + 2 * bleedPx;
-    const out = document.createElement('canvas');
-    out.width = W;
-    out.height = H;
-    const ctx = out.getContext('2d', { willReadFrequently: true });
-
-    if (bleedPx > 0) {
-        ctx.drawImage(face.canvas, bleedPx, bleedPx);
-        const img = ctx.getImageData(0, 0, W, H);
-        const d = img.data;
-        // origin[i]: index of the nearest piece pixel found so far (-1 = none).
-        // Growing ring by ring and always keeping the nearest origin gives a
-        // round (Euclidean) bleed edge; each bleed pixel copies its origin's colour.
-        const origin = new Int32Array(W * H).fill(-1);
-        let frontier = [];
-        for (let y = 0; y < face.h; y++) {
-            for (let x = 0; x < face.w; x++) {
-                if (face.mask[y * face.w + x]) {
-                    const i = (y + bleedPx) * W + x + bleedPx;
-                    origin[i] = i;
-                    frontier.push(i);
-                }
-            }
-        }
-        const maxD2 = (bleedPx + 0.5) * (bleedPx + 0.5);
-        const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
-        const filled = new Uint8Array(W * H);
-        while (frontier.length) {
-            const next = [];
-            for (const i of frontier) {
-                const x = i % W, y = (i - x) / W;
-                const o = origin[i];
-                const ox = o % W, oy = (o - ox) / W;
-                for (const [dx, dy] of offsets) {
-                    const nx = x + dx, ny = y + dy;
-                    if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-                    const j = ny * W + nx;
-                    const d2 = (nx - ox) * (nx - ox) + (ny - oy) * (ny - oy);
-                    if (d2 > maxD2) continue;
-                    const cur = origin[j];
-                    if (cur === j) continue; // a piece pixel
-                    if (cur >= 0) {
-                        const cx = cur % W, cy = (cur - cx) / W;
-                        if ((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy) <= d2) continue;
-                    }
-                    origin[j] = o;
-                    next.push(j);
-                    filled[j] = 1;
-                }
-            }
-            frontier = next;
-        }
-        for (let i = 0; i < W * H; i++) {
-            if (!filled[i]) continue;
-            const o = origin[i];
-            d[i * 4] = d[o * 4];
-            d[i * 4 + 1] = d[o * 4 + 1];
-            d[i * 4 + 2] = d[o * 4 + 2];
-            d[i * 4 + 3] = 255;
-        }
-        ctx.putImageData(img, 0, 0);
-    }
-    ctx.drawImage(face.canvas, bleedPx, bleedPx);
-
-    const result = { canvas: out, bleedPx, preview: scaledCopy(out, 400) };
-    face.cache.set(key, result);
-    return result;
 }
 
 // ---- Packing footprints ------------------------------------------------------------
