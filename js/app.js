@@ -1,5 +1,7 @@
 // PnP Layout: piece list, live packing (in a worker), sheet previews, export
-// and the shared PnPTools hooks.
+// and the shared PnPTools hooks. One script for the three pages; each page's
+// <body data-mode> says how it arranges pieces (tight | grid | fold) and it
+// has only that mode's controls.
 
 const ROTATIONS = [0, 45, 90, 135, 180, 225, 270, 315];
 
@@ -11,6 +13,9 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const MODE = document.body.dataset.mode || 'tight';
+// What the page lays out: pieces of any shape, or cards.
+const NOUN = MODE === 'tight' ? { one: 'piece', many: 'pieces' } : { one: 'card', many: 'cards' };
 const pieceList = $('pieceList');
 const sheetGrid = $('sheetGrid');
 
@@ -20,8 +25,9 @@ function setStatus(message, type = 'info') {
     status.className = `status ${type}`;
 }
 
+// Controls a page doesn't have read as their fallback.
 function num(id, fallback = 0) {
-    const v = parseFloat($(id).value);
+    const v = $(id) ? parseFloat($(id).value) : NaN;
     return Number.isFinite(v) ? v : fallback;
 }
 
@@ -29,16 +35,16 @@ function readSettings() {
     return {
         paper: { w: num('paperW', 210), h: num('paperH', 297) },
         margins: { top: num('marginTop'), bottom: num('marginBottom'), left: num('marginLeft'), right: num('marginRight') },
-        mode: $('packMode').value,
-        cropMarks: $('packMode').value !== 'tight' && $('cropMarks').checked,
-        foldDirection: $('foldDirection').value,
+        mode: MODE,
+        cropMarks: MODE !== 'tight' && $('cropMarks').checked,
+        foldDirection: MODE === 'fold' ? $('foldDirection').value : null,
         // Rows and columns typed in, or null to fit as many as possible.
-        gridSize: $('gridSizeMode').value === 'manual'
+        gridSize: MODE !== 'tight' && $('gridSizeMode').value === 'manual'
             ? { cols: Math.max(1, Math.round(num('gridCols', 1))), rows: Math.max(1, Math.round(num('gridRows', 1))) }
             : null,
         foldGap: Math.max(0, num('foldGap')),
         spacing: Math.max(0, num('spacing')),
-        cell: parseFloat($('precision').value) || 0.5,
+        cell: num('precision', 0.5),
         imageBleed: Math.max(0, num('imageBleed')),
         // How far artwork reaches past a piece's cut: the most bleed any image has.
         reach: maxImageBleedMm(),
@@ -46,7 +52,7 @@ function readSettings() {
         cornerRadius: Math.max(0, num('cornerRadius')),
         cutWidth: num('cutWidth', 0.5),
         cutColor: $('cutColor').value,
-        flipEdge: $('flipEdge').value,
+        flipEdge: $('flipEdge') ? $('flipEdge').value : 'long',
         backOffsetX: num('backOffsetX'),
         backOffsetY: num('backOffsetY'),
     };
@@ -215,7 +221,7 @@ function renderPieceList() {
     const allBack = document.createElement('button');
     allBack.type = 'button';
     allBack.className = 'btn-secondary btn-small';
-    allBack.textContent = 'Set one back for all pieces…';
+    allBack.textContent = `Set one back for all ${NOUN.many}…`;
     allBack.addEventListener('click', () => pickImage(async (file) => {
         const [face] = await loadFaces([file]);
         if (!face) return;
@@ -227,16 +233,16 @@ function renderPieceList() {
     eachBack.type = 'button';
     eachBack.className = 'btn-secondary btn-small';
     eachBack.textContent = 'Add backs…';
-    eachBack.title = 'Matched to pieces by name (Ace_front ↔ Ace_back), or in order';
+    eachBack.title = `Matched to ${NOUN.many} by name (Ace_front ↔ Ace_back), or in order`;
     eachBack.addEventListener('click', () => pickImages(async (files) => {
         const backs = await loadFaces(files);
         const attached = attachBacks(backs);
         const pieces = state.pieces.size;
         if (!attached) {
-            PnP.toast(`Couldn't match ${backs.length} backs to ${pieces} pieces. Name them like the fronts, or add one per piece.`, 'error');
+            PnP.toast(`Couldn't match ${backs.length} backs to ${pieces} ${NOUN.many}. Name them like the fronts, or add one per ${NOUN.one}.`, 'error');
             return;
         }
-        PnP.toast(attached === pieces ? `Every piece has a back.` : `${attached} of ${pieces} pieces got a back; the rest matched no back by name.`, attached === pieces ? 'success' : 'info');
+        PnP.toast(attached === pieces ? `Every ${NOUN.one} has a back.` : `${attached} of ${pieces} ${NOUN.many} got a back; the rest matched no back by name.`, attached === pieces ? 'success' : 'info');
         renderPieceList();
         schedulePack();
     }));
@@ -252,7 +258,7 @@ function renderPieceList() {
         row.innerHTML = `
             <div class="piece-head">
                 <div class="piece-name"></div>
-                <button type="button" class="piece-remove" title="Remove piece" aria-label="Remove piece">✕</button>
+                <button type="button" class="piece-remove" title="Remove ${NOUN.one}" aria-label="Remove ${NOUN.one}">✕</button>
             </div>
             <div class="piece-faces">
                 <div class="piece-face" title="Front"></div>
@@ -389,7 +395,7 @@ function runPack() {
     if (state.pieces.size === 0) {
         state.layout = null;
         renderSheets();
-        setStatus('Add pieces to get started', 'info');
+        setStatus(`Add ${NOUN.many} to get started`, 'info');
         return;
     }
     if (settings.mode === 'grid' || settings.mode === 'fold') {
@@ -454,7 +460,7 @@ function reportLayout(settings) {
     const unplacedIds = Object.keys(unplaced);
     if (unplacedIds.length) {
         const names = unplacedIds.map((id) => state.pieces.get(+id)?.name).filter(Boolean).join(', ');
-        setStatus(`${placed} piece(s) on ${sheets.length} sheet(s). Too large for the printable area: ${names}.`, 'error');
+        setStatus(`${placed} ${NOUN.one}(s) on ${sheets.length} sheet(s). Too large for the printable area: ${names}.`, 'error');
         return;
     }
     if (!placed) {
@@ -480,7 +486,7 @@ function reportLayout(settings) {
         setStatus(`A ${cols} × ${rows} grid doesn't fit the printable area; using the most that fits: ${state.layout.grid.cols} × ${state.layout.grid.rows}.`, 'error');
         return;
     }
-    setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% used`, 'success');
+    setStatus(`${placed} ${NOUN.one}(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% used`, 'success');
 }
 
 // ---- Sheet previews ------------------------------------------------------------------
@@ -512,7 +518,7 @@ function renderSheets() {
             index: i,
         });
         const cap = document.createElement('figcaption');
-        cap.textContent = `Sheet ${i + 1}${side === 'back' ? ' · back' : ''} · ${sheet.length} piece(s)`;
+        cap.textContent = `Sheet ${i + 1}${side === 'back' ? ' · back' : ''} · ${sheet.length} ${NOUN.one}(s)`;
         fig.append(canvas, cap);
         sheetGrid.append(fig);
     });
@@ -616,20 +622,70 @@ PnP.sendMenu($('sendSlot'), {
     },
 });
 
-// Precision is for tight packing, crop marks for grid and fold, the fold's
-// settings for fold.
-function updateModeUI() {
-    const mode = $('packMode').value;
-    $('precisionGroup').hidden = mode !== 'tight';
-    $('cropMarksGroup').hidden = mode === 'tight';
-    $('foldGroup').hidden = mode !== 'fold';
-    $('gridSizeGroup').hidden = mode === 'tight';
-    $('gridCountGroup').hidden = mode === 'tight' || $('gridSizeMode').value !== 'manual';
+// Columns and rows show only when they're set by hand.
+function updateGridUI() {
+    if ($('gridSizeMode')) $('gridCountGroup').hidden = $('gridSizeMode').value !== 'manual';
 }
-$('gridSizeMode').addEventListener('change', updateModeUI);
-$('packMode').addEventListener('change', updateModeUI);
-PnP.settings.onApply(updateModeUI);
-updateModeUI();
+if ($('gridSizeMode')) $('gridSizeMode').addEventListener('change', updateGridUI);
+PnP.settings.onApply(updateGridUI);
+updateGridUI();
+
+// The pieces as files (fronts and backs, each once) plus their settings,
+// which name the files by index: for project files and switching pages.
+function piecesSnapshot() {
+    const files = [];
+    const index = new Map();
+    const add = (face, role) => {
+        if (!index.has(face)) {
+            index.set(face, files.length);
+            files.push({ name: face.file.name, blob: face.file, role });
+        }
+        return index.get(face);
+    };
+    const pieces = [...state.pieces.values()].map((p) => ({
+        name: p.name,
+        widthMm: p.widthMm,
+        qty: p.qty,
+        rotate: p.rotate,
+        front: add(p.front, 'front'),
+        back: p.back ? add(p.back, 'back') : null,
+    }));
+    return { files, pieces };
+}
+
+// Pieces back from a snapshot (files in the same order).
+async function restorePieces(files, saved) {
+    state.pieces.clear();
+    if (!saved || !saved.pieces) {
+        await addFiles(files);
+        return;
+    }
+    // Keep indexes aligned with the saved file list even if one fails to load.
+    const faces = [];
+    for (const file of files) {
+        faces.push((await loadFaces([file]))[0] || null);
+    }
+    saved.pieces.forEach((s) => {
+        const front = faces[s.front];
+        if (!front) return;
+        const piece = addPiece(front, s.back !== null ? faces[s.back] || null : null);
+        Object.assign(piece, { name: s.name, widthMm: s.widthMm, qty: s.qty, rotate: s.rotate });
+    });
+    renderPieceList();
+    schedulePack();
+}
+
+// Switching page takes the pieces along.
+const PAGE_STATE = 'layout-pieces.json';
+document.querySelectorAll('.tool-nav a').forEach((link) => link.addEventListener('click', async (e) => {
+    if (!state.pieces.size) return;
+    e.preventDefault();
+    const { files, pieces } = piecesSnapshot();
+    const items = [...files, { name: PAGE_STATE, blob: new Blob([JSON.stringify({ pieces })], { type: 'application/json' }), role: 'state' }];
+    const id = await PnP.handoff.save({ name: 'Layout pieces', from: 'Layout', items });
+    PnP.allowLeave();
+    location.href = `${link.getAttribute('href')}?import=${encodeURIComponent(id)}`;
+}));
 
 PnP.dropzone($('dropZone'), {
     input: $('imageInput'),
@@ -645,54 +701,28 @@ let projectFiles = [];
 PnP.init({
     tool: 'PnPLayout',
     offlineFiles: ['js/pack-worker.js'],
+    settingsKey: MODE === 'tight' ? 'PnPLayout' : `PnPLayout-${MODE}`,
     project: {
         getFiles: () => {
-            const files = [];
-            const index = new Map();
-            const add = (face, role) => {
-                if (!index.has(face)) {
-                    index.set(face, files.length);
-                    files.push({ name: face.file.name, blob: face.file, role });
-                }
-                return index.get(face);
-            };
-            state.pieces.forEach((p) => { add(p.front, 'front'); if (p.back) add(p.back, 'back'); });
-            state.projectIndex = index;
-            return files;
+            const snap = piecesSnapshot();
+            state.projectPieces = snap.pieces;
+            return snap.files;
         },
-        getState: () => ({
-            pieces: [...state.pieces.values()].map((p) => ({
-                name: p.name,
-                widthMm: p.widthMm,
-                qty: p.qty,
-                rotate: p.rotate,
-                front: state.projectIndex.get(p.front),
-                back: p.back ? state.projectIndex.get(p.back) : null,
-            })),
-        }),
+        getState: () => ({ pieces: state.projectPieces }),
         setFiles: (files) => { projectFiles = files; },
-        setState: async (saved) => {
-            state.pieces.clear();
-            if (!saved || !saved.pieces) {
-                await addFiles(projectFiles);
-                return;
-            }
-            // Keep indexes aligned with the saved file list even if one fails to load.
-            const faces = [];
-            for (const file of projectFiles) {
-                faces.push((await loadFaces([file]))[0] || null);
-            }
-            saved.pieces.forEach((s) => {
-                const front = faces[s.front];
-                if (!front) return;
-                const piece = addPiece(front, s.back !== null ? faces[s.back] || null : null);
-                Object.assign(piece, { name: s.name, widthMm: s.widthMm, qty: s.qty, rotate: s.rotate });
-            });
-            renderPieceList();
-            schedulePack();
-        },
+        setState: (saved) => restorePieces(projectFiles, saved),
     },
     hasUnsavedWork: () => state.pieces.size > 0,
 });
 
-PnP.handoff.receive((items) => addFiles(PnP.itemsToFiles(items)));
+PnP.handoff.receive(async (items, set) => {
+    const stateItem = items.find((it) => it.role === 'state' && it.name === PAGE_STATE);
+    if (!stateItem) {
+        await addFiles(PnP.itemsToFiles(items));
+        return;
+    }
+    // Pieces carried over from another Layout page; that hand-off isn't kept.
+    const saved = JSON.parse(await stateItem.blob.text());
+    await restorePieces(PnP.itemsToFiles(items.filter((it) => it !== stateItem)), saved);
+    PnP.handoff.remove(set.id).catch(() => {});
+});

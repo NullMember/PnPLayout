@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PnP Layout</title>
+    <title>PnP Layout: Fold</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/tool.css">
     <link rel="manifest" href="manifest.webmanifest">
@@ -13,15 +13,15 @@
     <link rel="stylesheet" href="shared/pnp-shared.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
-<body data-mode="tight">
+<body data-mode="fold">
     <div class="container">
         <header>
-            <h1>PnP Layout</h1>
-            <p class="subtitle">Pack tokens, tiles and other shapes tightly onto sheets.</p>
+            <h1>Fold Cards</h1>
+            <p class="subtitle">Fronts and backs on one page: print one-sided, fold, glue and cut.</p>
             <nav class="tool-nav">
-                <a class="nav-link current" href="index.html">Pack</a>
+                <a class="nav-link" href="index.html">Pack &rarr;</a>
                 <a class="nav-link" href="grid.html">Card grid &rarr;</a>
-                <a class="nav-link" href="fold.html">Fold &rarr;</a>
+                <a class="nav-link current" href="fold.html">Fold</a>
             </nav>
         </header>
 
@@ -29,10 +29,9 @@
             <!-- Sidebar -->
             <div class="sidebar">
                 <div class="panel">
-                    <div class="panel-title">Pieces <span class="help" tabindex="0" data-tip="One image per piece. Transparent areas are ignored, so shapes nest together.">?</span></div>
+                    <div class="panel-title">Cards <span class="help" tabindex="0" data-tip="One image per card. Add backs in the card list.">?</span></div>
                     <div class="dropzone" id="dropZone">
-                        <div class="dz-title">Drag &amp; drop piece images here</div>
-                        <div>PNG with transparency works best</div>
+                        <div class="dz-title">Drag &amp; drop card images here</div>
                         <input type="file" id="imageInput" multiple accept="image/png,image/jpeg,image/webp" hidden>
                     </div>
                 </div>
@@ -76,32 +75,56 @@
                 </div>
 
                 <div class="panel">
-                    <div class="panel-title">Packing <span class="help" tabindex="0" data-tip="Precision: finer packs tighter but slower.">?</span></div>
+                    <div class="panel-title">Fold <span class="help" tabindex="0" data-tip="Fold margin: space between the cards and the fold.">?</span></div>
                     <div class="row">
                         <div class="control-group">
-                            <label for="spacing">Gap between pieces (mm)</label>
-                            <input type="number" id="spacing" value="2" min="0" step="0.5" data-unit="mm">
-                        </div>
-                        <div class="control-group">
-                            <label for="precision">Precision</label>
-                            <select id="precision">
-                                <option value="0.25">Fine (0.25 mm)</option>
-                                <option value="0.5" selected>Normal (0.5 mm)</option>
-                                <option value="1">Fast (1 mm)</option>
+                            <label for="foldDirection">Fold</label>
+                            <select id="foldDirection">
+                                <option value="auto">Auto (fits more)</option>
+                                <option value="vertical">Vertical</option>
+                                <option value="horizontal">Horizontal</option>
                             </select>
                         </div>
+                        <div class="control-group">
+                            <label for="foldGap">Fold margin (mm)</label>
+                            <input type="number" id="foldGap" value="2" min="0" max="30" step="0.5" data-unit="mm">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="gridSizeMode">Grid size</label>
+                        <select id="gridSizeMode">
+                            <option value="auto">Auto: as many as fit</option>
+                            <option value="manual">Rows and columns</option>
+                        </select>
+                    </div>
+                    <div class="row" id="gridCountGroup">
+                        <div class="control-group">
+                            <label for="gridCols">Columns</label>
+                            <input type="number" id="gridCols" value="3" min="1" max="30" step="1">
+                        </div>
+                        <div class="control-group">
+                            <label for="gridRows">Rows</label>
+                            <input type="number" id="gridRows" value="3" min="1" max="30" step="1">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="spacing">Gap between cards (mm)</label>
+                        <input type="number" id="spacing" value="2" min="0" step="0.5" data-unit="mm">
+                    </div>
+                    <div class="control-group">
+                        <label class="inline"><input type="checkbox" id="cropMarks" checked> Crop marks</label>
                     </div>
                     <div class="control-group">
                         <label for="defaultDpi">DPI for images without DPI info</label>
                         <input type="number" id="defaultDpi" value="300" min="30" max="2400" step="1">
-                        <div class="input-hint">Sets the starting size of new pieces.</div>
+                        <div class="input-hint">Sets the starting size of new cards.</div>
                     </div>
                 </div>
 
                 <div class="panel">
                     <div class="panel-title">Cutting <span class="help" tabindex="0" data-tip="Bleed in images: for images with bleed that weren't made by Bleed tool.">?</span></div>
                     <div class="control-group" id="bleedTool">
-                        <div class="input-hint">Add bleed to your pieces with Bleed tool.</div>
+                        <div class="input-hint">Add bleed to your cards with Bleed tool.</div>
                         <div id="sendSlot"></div>
                     </div>
                     <div class="control-group">
@@ -149,27 +172,6 @@
                 </div>
 
                 <div class="panel">
-                    <div class="panel-title">Back Sides <span class="help" tabindex="0" data-tip="Backs print on the page after their fronts, mirrored for duplex. Use the offsets if your printer shifts the back.">?</span></div>
-                    <div class="control-group">
-                        <label for="flipEdge">Duplex flips on</label>
-                        <select id="flipEdge">
-                            <option value="long">Long edge</option>
-                            <option value="short">Short edge</option>
-                        </select>
-                    </div>
-                    <div class="row">
-                        <div class="control-group">
-                            <label for="backOffsetX">Back offset X (mm)</label>
-                            <input type="number" id="backOffsetX" value="0" step="0.1" data-unit="mm">
-                        </div>
-                        <div class="control-group">
-                            <label for="backOffsetY">Back offset Y (mm)</label>
-                            <input type="number" id="backOffsetY" value="0" step="0.1" data-unit="mm">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="panel">
                     <div class="panel-title">Export</div>
                     <div class="button-group">
                         <button class="btn-primary" id="downloadPdf" disabled>Download PDF</button>
@@ -182,16 +184,16 @@
             <!-- Main content -->
             <div class="main">
                 <div class="preview-section">
-                    <div class="preview-title">Pieces <span id="pieceCount" class="input-hint"></span></div>
+                    <div class="preview-title">Cards <span id="pieceCount" class="input-hint"></span></div>
                     <div class="piece-list" id="pieceList">
                         <div class="empty-state">
                             <div class="empty-state-icon">🧩</div>
-                            <div>Add piece images to start. Set each piece’s size and quantity, and they are packed onto sheets.</div>
+                            <div>Add card images and their backs to start.</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="status info" id="status">Add pieces to get started</div>
+                <div class="status info" id="status">Add cards to get started</div>
 
                 <div class="preview-section">
                     <div class="sheet-toolbar">
