@@ -8,17 +8,27 @@
 const CROP_MARK = { offset: 1, length: 5 }; // mm: gap from the bleed edge, mark length
 
 // How many w × h cards fit an area in rows and columns `gap` apart, upright
-// or (when canTurn and it fits more) on their side.
-function fitGrid(areaW, areaH, cardW, cardH, gap, canTurn) {
+// or (when canTurn and it fits more) on their side. With `want` ({ cols,
+// rows }) that grid is used instead, upright if it fits, else on its side;
+// `tooBig` says it fits neither way (the most that fits is used then).
+function fitGrid(areaW, areaH, cardW, cardH, gap, canTurn, want = null) {
     const fit = (w, h) => ({
         cols: Math.max(0, Math.floor((areaW + gap) / (w + gap) + 1e-9)),
         rows: Math.max(0, Math.floor((areaH + gap) / (h + gap) + 1e-9)),
     });
     const upright = fit(cardW, cardH);
     const turned = canTurn ? fit(cardH, cardW) : { cols: 0, rows: 0 };
-    const turn = turned.cols * turned.rows > upright.cols * upright.rows;
-    const { cols, rows } = turn ? turned : upright;
-    return { cols, rows, turn, w: turn ? cardH : cardW, h: turn ? cardW : cardH, gap };
+    const holds = (f) => want && f.cols >= want.cols && f.rows >= want.rows;
+    let turn = turned.cols * turned.rows > upright.cols * upright.rows;
+    let tooBig = false;
+    if (want) {
+        if (holds(upright)) turn = false;
+        else if (holds(turned)) turn = true;
+        else tooBig = true;
+    }
+    const most = turn ? turned : upright;
+    const { cols, rows } = want && !tooBig ? want : most;
+    return { cols, rows, turn, w: turn ? cardH : cardW, h: turn ? cardW : cardH, gap, tooBig };
 }
 
 // What grid and fold layouts share: the cards to place and the cell size.
@@ -60,7 +70,7 @@ function gridLayout(pieces, settings) {
     const { paper, margins } = settings;
     const areaW = paper.w - margins.left - margins.right;
     const areaH = paper.h - margins.top - margins.bottom;
-    const g = fitGrid(areaW, areaH, cardW, cardH, gap, canTurn);
+    const g = fitGrid(areaW, areaH, cardW, cardH, gap, canTurn, settings.gridSize);
     if (!list.length || !g.cols || !g.rows) return unplacedAll(list);
 
     const gridW = g.cols * g.w + (g.cols - 1) * gap;
@@ -83,12 +93,14 @@ function foldLayout(pieces, settings) {
     const foldGap = Math.max(settings.foldGap, settings.reach);
     const options = [];
     if (settings.foldDirection !== 'horizontal') {
-        options.push({ dir: 'vertical', g: fitGrid(areaW / 2 - foldGap, areaH, cardW, cardH, gap, canTurn) });
+        options.push({ dir: 'vertical', g: fitGrid(areaW / 2 - foldGap, areaH, cardW, cardH, gap, canTurn, settings.gridSize) });
     }
     if (settings.foldDirection !== 'vertical') {
-        options.push({ dir: 'horizontal', g: fitGrid(areaW, areaH / 2 - foldGap, cardW, cardH, gap, canTurn) });
+        options.push({ dir: 'horizontal', g: fitGrid(areaW, areaH / 2 - foldGap, cardW, cardH, gap, canTurn, settings.gridSize) });
     }
-    const best = options.reduce((a, b) => (b.g.cols * b.g.rows > a.g.cols * a.g.rows ? b : a));
+    // The fold that holds the grid asked for, else the one that fits more.
+    const score = (o) => (o.g.tooBig ? 0 : 1e6) + o.g.cols * o.g.rows;
+    const best = options.reduce((a, b) => (score(b) > score(a) ? b : a));
     const { dir, g } = best;
     if (!list.length || !g.cols || !g.rows) return unplacedAll(list);
 

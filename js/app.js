@@ -32,6 +32,10 @@ function readSettings() {
         mode: $('packMode').value,
         cropMarks: $('packMode').value !== 'tight' && $('cropMarks').checked,
         foldDirection: $('foldDirection').value,
+        // Rows and columns typed in, or null to fit as many as possible.
+        gridSize: $('gridSizeMode').value === 'manual'
+            ? { cols: Math.max(1, Math.round(num('gridCols', 1))), rows: Math.max(1, Math.round(num('gridRows', 1))) }
+            : null,
         foldGap: Math.max(0, num('foldGap')),
         spacing: Math.max(0, num('spacing')),
         cell: parseFloat($('precision').value) || 0.5,
@@ -456,6 +460,11 @@ function reportLayout(settings) {
     const grid = state.layout.grid
         ? ` · ${state.layout.grid.cols} × ${state.layout.grid.rows} per sheet${fold ? `, backs across a ${fold.dir} fold` : ''}`
         : '';
+    if (state.layout.grid && state.layout.grid.tooBig) {
+        const { cols, rows } = settings.gridSize;
+        setStatus(`A ${cols} × ${rows} grid doesn't fit the printable area; using the most that fits: ${state.layout.grid.cols} × ${state.layout.grid.rows}.`, 'error');
+        return;
+    }
     setStatus(`${placed} piece(s) on ${sheets.length} sheet(s)${backs ? ` + ${backs} back page(s)` : ''} (${pages} PDF page(s))${grid} · ${fill}% of the printable area used`, 'success');
 }
 
@@ -575,7 +584,10 @@ function updateModeUI() {
     $('precisionGroup').hidden = mode !== 'tight';
     $('cropMarksGroup').hidden = mode === 'tight';
     $('foldGroup').hidden = mode !== 'fold';
+    $('gridSizeGroup').hidden = mode === 'tight';
+    $('gridCountGroup').hidden = mode === 'tight' || $('gridSizeMode').value !== 'manual';
 }
+$('gridSizeMode').addEventListener('change', updateModeUI);
 $('packMode').addEventListener('change', updateModeUI);
 PnP.settings.onApply(updateModeUI);
 updateModeUI();
