@@ -231,18 +231,24 @@ function renderPieceList() {
         schedulePack();
     }));
     toolbar.append(allBack, eachBack);
-    pieceList.append(toolbar);
+    // Pieces sit side by side in one row that scrolls sideways.
+    const strip = document.createElement('div');
+    strip.className = 'piece-strip';
+    pieceList.append(toolbar, strip);
 
     state.pieces.forEach((piece) => {
         const row = document.createElement('div');
         row.className = 'piece';
         row.innerHTML = `
+            <div class="piece-head">
+                <div class="piece-name"></div>
+                <button type="button" class="piece-remove" title="Remove piece" aria-label="Remove piece">✕</button>
+            </div>
             <div class="piece-faces">
                 <div class="piece-face" title="Front"></div>
                 <div class="piece-face back" title="Back"></div>
             </div>
             <div class="piece-body">
-                <div class="piece-name"></div>
                 <div class="piece-fields">
                     <div class="control-group">
                         <label for="pw${piece.id}">Width (mm)</label>
@@ -255,8 +261,7 @@ function renderPieceList() {
                     <label class="inline piece-rotate"><input type="checkbox"> Allow rotation</label>
                 </div>
                 <div class="input-hint piece-size"></div>
-            </div>
-            <button type="button" class="piece-remove" title="Remove piece" aria-label="Remove piece">✕</button>`;
+            </div>`;
 
         row.querySelector('.piece-name').textContent = piece.name;
         row.querySelector('.piece-face').append(thumb(piece.front));
@@ -314,7 +319,7 @@ function renderPieceList() {
             renderPieceList();
             schedulePack();
         });
-        pieceList.append(row);
+        strip.append(row);
     });
 
     PnP.units.scan(pieceList);

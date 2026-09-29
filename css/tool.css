@@ -13,19 +13,30 @@
     justify-content: flex-end;
 }
 
+.piece-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px; /* room for the scroll bar */
+    scroll-snap-type: x proximity;
+}
+
+/* One piece: a card with its images on top and its settings below. */
 .piece {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 16px;
-    align-items: center;
-    padding: 12px 14px;
+    flex: 0 0 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    scroll-snap-align: start;
 }
 
 .piece-faces {
     display: flex;
+    justify-content: center;
     gap: 8px;
 }
 
@@ -96,23 +107,29 @@
 
 .piece-fields {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .piece-fields .control-group {
-    width: 120px;
     margin: 0;
 }
 
-.piece-rotate {
-    padding-bottom: 10px;
+.piece-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: -4px -6px 0 0;
+}
+
+.piece-head .piece-name {
+    flex: 1;
+    min-width: 0;
 }
 
 .piece-remove {
-    align-self: start;
-    padding: 4px 8px;
+    flex-shrink: 0;
+    padding: 2px 6px;
     background: none;
     color: var(--text-dim);
 }
